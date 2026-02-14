@@ -950,7 +950,7 @@
     <div class="sidebar-section hidden" id="wallSection">
       <h3>Drawing Walls</h3>
       <p style="font-size:11px; color:var(--text-dim); line-height:1.4; margin-bottom:8px" id="wallHint">
-        Click to start a wall, click again to end it. Walls chain together. Double-click or Escape to stop. Ctrl+Z to undo last wall.
+        Draw interior walls only — the perimeter handles the exterior. Click to start, click to end. Walls chain together. Escape to stop chaining. Ctrl+Z to undo.
       </p>
       <div id="wallList" style="margin-top:6px; max-height:120px; overflow-y:auto"></div>
       <button class="btn danger hidden" style="width:100%; margin-top:6px" id="wallClearBtn">
@@ -1918,16 +1918,7 @@ function onMouseUp(e) {
 }
 
 function onDoubleClick(e) {
-  if (!wallMode) return;
-  // Double-click stops wall chaining — remove the spurious segment from 2nd mousedown
-  if (walls.length > 0) {
-    walls.pop();
-    updateWallList();
-    saveData();
-  }
-  wallStartPoint = null;
-  wallMousePos = null;
-  drawWallOverlay();
+  // unused — kept as empty handler
 }
 
 function onWheel(e) {
