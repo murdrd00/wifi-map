@@ -1004,7 +1004,7 @@
 
     <!-- Zoom Controls -->
     <div class="zoom-controls">
-      <button onclick="toggleDragMode()" id="dragBtn" style="font-size:16px">✋<span class="ztip">Drag mode</span></button>
+      <button onclick="toggleDragMode()" id="dragBtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" stroke="none"><path d="M4.5 7V2.5a1 1 0 0 1 2 0V7h.5V1.5a1 1 0 0 1 2 0V7h.5V2a1 1 0 0 1 2 0v5h.5V4a1 1 0 0 1 2 0v6a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V7.5c0-.5.3-1 .8-1.2.5-.2 1 0 1.3.4l.4.6V7z"/></svg><span class="ztip">Drag mode</span></button>
       <button onclick="zoomIn()">+<span class="ztip">Zoom in</span></button>
       <div class="zoom-label" id="zoomLabel">100%</div>
       <button onclick="zoomOut()">−<span class="ztip">Zoom out</span></button>
@@ -2737,6 +2737,7 @@ function deletePoint(id) {
   updatePointList();
   updateHeatmap();
   saveData();
+  document.getElementById('tooltip').style.display = 'none';
 }
 
 function clearAllPoints() {
