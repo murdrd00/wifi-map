@@ -1089,7 +1089,59 @@ let wallMode = false;
 let walls = [];              // [{x1, y1, x2, y2, name, strength}, ...]
 let wallStartPoint = null;   // {x, y} — first click of current segment
 let wallMousePos = null;     // {x, y} — live cursor position for preview line
+let wallSnapResult = null;   // {x, y, type: 'endpoint'|'line', wallIndex, endIndex} — current snap target
+const WALL_SNAP_SCREEN_PX = 14; // snap radius in screen pixels (consistent feel at any zoom)
 const WALL_ATTENUATION_MAX = 0.15; // weight multiplier at full wall strength (~-8 dB per wall)
+
+// Snap a canvas-space point to nearby wall endpoints or wall lines
+function snapWallPoint(cx, cy) {
+  const snapRadius = WALL_SNAP_SCREEN_PX / zoom; // convert screen px to canvas px
+  let best = null;
+  let bestDist = snapRadius;
+
+  // 1) Check all existing wall endpoints
+  for (let i = 0; i < walls.length; i++) {
+    const endpoints = [
+      { x: walls[i].x1, y: walls[i].y1, endIndex: 0 },
+      { x: walls[i].x2, y: walls[i].y2, endIndex: 1 },
+    ];
+    for (const ep of endpoints) {
+      const d = Math.hypot(cx - ep.x, cy - ep.y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = { x: ep.x, y: ep.y, type: 'endpoint', wallIndex: i, endIndex: ep.endIndex };
+      }
+    }
+  }
+  // Also check wallStartPoint if it exists (snap back to your own start)
+  if (wallStartPoint) {
+    const d = Math.hypot(cx - wallStartPoint.x, cy - wallStartPoint.y);
+    if (d < bestDist) {
+      bestDist = d;
+      best = { x: wallStartPoint.x, y: wallStartPoint.y, type: 'endpoint', wallIndex: -1, endIndex: -1 };
+    }
+  }
+
+  // 2) Check nearest point on each wall line segment (only if no endpoint snap found)
+  if (!best) {
+    for (let i = 0; i < walls.length; i++) {
+      const w = walls[i];
+      const dx = w.x2 - w.x1, dy = w.y2 - w.y1;
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq < 1) continue;
+      let t = ((cx - w.x1) * dx + (cy - w.y1) * dy) / lenSq;
+      t = Math.max(0.01, Math.min(0.99, t)); // clamp away from endpoints (those handled above)
+      const px = w.x1 + t * dx, py = w.y1 + t * dy;
+      const d = Math.hypot(cx - px, cy - py);
+      if (d < bestDist) {
+        bestDist = d;
+        best = { x: Math.round(px), y: Math.round(py), type: 'line', wallIndex: i };
+      }
+    }
+  }
+
+  return best; // null if nothing nearby
+}
 let apMode = false;
 let accessPoints = [];       // [{x, y, name, id}, ...]
 let floorMode = false;
@@ -1383,6 +1435,7 @@ function setupEventListeners() {
           // Cancel current start point, stay in wall mode
           wallStartPoint = null;
           wallMousePos = null;
+          wallSnapResult = null;
           drawWallOverlay();
         } else {
           exitWallMode();
@@ -1849,11 +1902,17 @@ function onMouseDown(e) {
     }
 
     if (wallMode) {
-      const pt = { x: Math.round(pos.x), y: Math.round(pos.y) };
+      const snap = snapWallPoint(pos.x, pos.y);
+      const pt = snap ? { x: snap.x, y: snap.y } : { x: Math.round(pos.x), y: Math.round(pos.y) };
       if (!wallStartPoint) {
         // First click: set start point
         wallStartPoint = pt;
       } else {
+        // Don't create zero-length walls
+        if (pt.x === wallStartPoint.x && pt.y === wallStartPoint.y) {
+          drawWallOverlay();
+          return;
+        }
         // Second click: commit wall segment, chain (end becomes next start)
         walls.push({
           x1: wallStartPoint.x, y1: wallStartPoint.y,
@@ -1904,10 +1963,11 @@ function onMouseMove(e) {
     applyTransform();
     return;
   }
-  // Wall mode: track cursor for preview line
-  if (wallMode && wallStartPoint) {
+  // Wall mode: track cursor for preview line + snap highlight
+  if (wallMode) {
     const pos = screenToCanvas(e.clientX, e.clientY);
     wallMousePos = { x: Math.round(pos.x), y: Math.round(pos.y) };
+    wallSnapResult = snapWallPoint(pos.x, pos.y);
     drawWallOverlay();
   }
 }
@@ -2266,6 +2326,7 @@ function exitWallMode() {
   wallMode = false;
   wallStartPoint = null;
   wallMousePos = null;
+  wallSnapResult = null;
   const btn = document.getElementById('wallBtn');
   btn.classList.remove('primary');
   document.getElementById('wallSection').classList.add('hidden');
@@ -2373,6 +2434,7 @@ function drawWallOverlay() {
 
   // Draw preview line from wallStartPoint to cursor
   if (wallMode && wallStartPoint) {
+    const previewTarget = wallSnapResult ? { x: wallSnapResult.x, y: wallSnapResult.y } : wallMousePos;
     ptCtx.save();
     // Start point dot
     ptCtx.beginPath();
@@ -2383,14 +2445,51 @@ function drawWallOverlay() {
     ptCtx.lineWidth = 2;
     ptCtx.stroke();
 
-    // Preview line to cursor
-    if (wallMousePos) {
+    // Preview line to cursor (or snap target)
+    if (previewTarget) {
       ptCtx.strokeStyle = orange + '0.4)';
       ptCtx.lineWidth = 2;
       ptCtx.setLineDash([6, 3]);
       ptCtx.beginPath();
       ptCtx.moveTo(wallStartPoint.x, wallStartPoint.y);
-      ptCtx.lineTo(wallMousePos.x, wallMousePos.y);
+      ptCtx.lineTo(previewTarget.x, previewTarget.y);
+      ptCtx.stroke();
+    }
+    ptCtx.restore();
+  }
+
+  // Draw snap highlight (visible before and during wall placement)
+  if (wallMode && wallSnapResult) {
+    ptCtx.save();
+    if (wallSnapResult.type === 'endpoint') {
+      // Bright ring around snapped endpoint
+      ptCtx.beginPath();
+      ptCtx.arc(wallSnapResult.x, wallSnapResult.y, 8, 0, Math.PI * 2);
+      ptCtx.strokeStyle = '#22d3ee';
+      ptCtx.lineWidth = 2.5;
+      ptCtx.stroke();
+      // Inner dot
+      ptCtx.beginPath();
+      ptCtx.arc(wallSnapResult.x, wallSnapResult.y, 3, 0, Math.PI * 2);
+      ptCtx.fillStyle = '#22d3ee';
+      ptCtx.fill();
+    } else if (wallSnapResult.type === 'line') {
+      // Highlight the wall line being snapped to
+      const w = walls[wallSnapResult.wallIndex];
+      ptCtx.strokeStyle = 'rgba(34, 211, 238, 0.5)';
+      ptCtx.lineWidth = 5;
+      ptCtx.setLineDash([]);
+      ptCtx.beginPath();
+      ptCtx.moveTo(w.x1, w.y1);
+      ptCtx.lineTo(w.x2, w.y2);
+      ptCtx.stroke();
+      // Dot on the snap point
+      ptCtx.beginPath();
+      ptCtx.arc(wallSnapResult.x, wallSnapResult.y, 5, 0, Math.PI * 2);
+      ptCtx.fillStyle = '#22d3ee';
+      ptCtx.fill();
+      ptCtx.strokeStyle = '#fff';
+      ptCtx.lineWidth = 2;
       ptCtx.stroke();
     }
     ptCtx.restore();
