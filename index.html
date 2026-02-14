@@ -897,11 +897,14 @@
     <div class="sidebar-section hidden" id="wallSection">
       <h3>Tracing Walls</h3>
       <p style="font-size:11px; color:var(--text-dim); line-height:1.4; margin-bottom:8px" id="wallHint">
-        Click around the building perimeter. Click the Walls button again to close the shape. Ctrl+Z to undo last point.
+        Click around each wall area. Click "Close Wall" to finish one, then trace the next. Click "Done" when finished. Ctrl+Z to undo.
       </p>
-      <div id="wallList" style="max-height:120px; overflow-y:auto"></div>
+      <button class="btn primary hidden" style="width:100%; margin-top:6px" id="wallCloseBtn">
+        Close Wall &amp; Start Next
+      </button>
+      <div id="wallList" style="margin-top:6px; max-height:120px; overflow-y:auto"></div>
       <button class="btn danger hidden" style="width:100%; margin-top:6px" id="wallClearBtn">
-        Clear Walls
+        Clear All Walls
       </button>
     </div>
 
@@ -1032,14 +1035,14 @@ let currentSignal = null;
 let selectedNetwork = null;   // null = connected network, or SSID string for a specific network
 let nearbyNetworks = [];      // list from last scan
 let wallMode = false;
-let wallVertices = [];
-let wallClosed = false;
+let walls = [];              // [{vertices: [{x,y},...], name: 'Wall 1'}, ...]
+let wallCurrentVerts = [];   // vertices being drawn for current in-progress wall
 let floorMode = false;
 let floorRegions = [];       // [{vertices: [{x,y},...], name: 'Floor 1'}, ...]
 let floorCurrentVerts = [];  // vertices being drawn for current floor
 
 // Multi-floorplan management
-let floorplans = [];         // [{id, name, image, points, walls, wallClosed, floors, stripped, originalImage}, ...]
+let floorplans = [];         // [{id, name, image, points, walls, floors, stripped, originalImage}, ...]
 let activeFloorplanId = null;
 
 // Canvas / viewport
@@ -1090,13 +1093,17 @@ function loadSavedData(data) {
       const fp = floorplans.find(f => f.id === targetId) || floorplans[0];
       activeFloorplanId = fp.id;
       points = fp.points ? JSON.parse(JSON.stringify(fp.points)) : [];
-      wallVertices = fp.walls ? JSON.parse(JSON.stringify(fp.walls)) : [];
-      wallClosed = fp.wallClosed || false;
+      walls = fp.walls ? JSON.parse(JSON.stringify(fp.walls)) : [];
+      wallCurrentVerts = [];
+      // Migrate old format: flat vertex array → array of wall objects
+      if (walls.length > 0 && walls[0].x !== undefined && walls[0].vertices === undefined) {
+        walls = [{ vertices: walls, name: 'Wall 1' }];
+      }
       floorRegions = fp.floors ? JSON.parse(JSON.stringify(fp.floors)) : [];
       floorplanStripped = fp.stripped || false;
       originalFloorplanDataURL = fp.originalImage || null;
 
-      if (wallClosed) exitWallMode();
+      if (walls.length > 0) { updateWallList(); exitWallMode(); }
       if (floorRegions.length > 0) { updateFloorList(); exitFloorMode(); }
       updatePointList();
       updateFpList();
@@ -1118,9 +1125,11 @@ function loadSavedData(data) {
       updatePointList();
     }
     if (data.walls && data.walls.length > 0) {
-      wallVertices = data.walls;
-      wallClosed = data.wallClosed || false;
-      if (wallClosed) exitWallMode();
+      // Legacy: walls was a flat vertex array
+      walls = [{ vertices: data.walls, name: 'Wall 1' }];
+      wallCurrentVerts = [];
+      updateWallList();
+      exitWallMode();
     }
     if (data.floors && data.floors.length > 0) {
       floorRegions = data.floors;
@@ -1135,8 +1144,7 @@ function loadSavedData(data) {
         name: 'Floor Plan 1',
         image: data.floorplan,
         points: JSON.parse(JSON.stringify(points)),
-        walls: JSON.parse(JSON.stringify(wallVertices)),
-        wallClosed: wallClosed,
+        walls: JSON.parse(JSON.stringify(walls)),
         floors: JSON.parse(JSON.stringify(floorRegions)),
         stripped: false,
         originalImage: null,
@@ -1154,11 +1162,12 @@ function setupEventListeners() {
 
   // Wall mode buttons
   document.getElementById('wallBtn').addEventListener('click', toggleWallMode);
+  document.getElementById('wallCloseBtn').addEventListener('click', closeCurrentWall);
   document.getElementById('wallClearBtn').addEventListener('click', () => {
-    wallVertices = [];
-    wallClosed = false;
-    updateWallList();
+    walls = [];
+    wallCurrentVerts = [];
     exitWallMode();
+    updateWallList();
     updateHeatmap();
     saveData();
     toast('Walls cleared');
@@ -1286,27 +1295,21 @@ function setupEventListeners() {
       if (floorMode && floorCurrentVerts.length > 0) {
         floorCurrentVerts.pop();
         drawFloorOverlay();
-      } else if (wallMode && wallVertices.length > 0) {
-        wallVertices.pop();
-        updateWallList();
+      } else if (wallMode && wallCurrentVerts.length > 0) {
+        wallCurrentVerts.pop();
         drawWallOverlay();
-        saveData();
       } else {
         undoLastPoint();
       }
     }
     if (e.key === 'Escape') {
       if (wallMode) {
-        if (wallVertices.length >= 3) {
-          wallClosed = true;
-          exitWallMode();
-          updateHeatmap();
-          saveData();
-          toast('Building outline set');
-        } else {
-          exitWallMode();
-          drawPoints();
+        if (wallCurrentVerts.length >= 3) {
+          closeCurrentWall();
         }
+        exitWallMode();
+        updateHeatmap();
+        saveData();
       }
       if (floorMode) {
         exitFloorMode();
@@ -1480,8 +1483,7 @@ function snapshotActiveFloorplan() {
   const fp = floorplans.find(f => f.id === activeFloorplanId);
   if (!fp) return;
   fp.points = JSON.parse(JSON.stringify(points));
-  fp.walls = JSON.parse(JSON.stringify(wallVertices));
-  fp.wallClosed = wallClosed;
+  fp.walls = JSON.parse(JSON.stringify(walls));
   fp.floors = JSON.parse(JSON.stringify(floorRegions));
   fp.stripped = floorplanStripped;
   fp.originalImage = originalFloorplanDataURL;
@@ -1507,8 +1509,12 @@ function switchToFloorplan(id) {
 
   activeFloorplanId = id;
   points = fp.points ? JSON.parse(JSON.stringify(fp.points)) : [];
-  wallVertices = fp.walls ? JSON.parse(JSON.stringify(fp.walls)) : [];
-  wallClosed = fp.wallClosed || false;
+  walls = fp.walls ? JSON.parse(JSON.stringify(fp.walls)) : [];
+  wallCurrentVerts = [];
+  // Migrate old format: flat vertex array → array of wall objects
+  if (walls.length > 0 && walls[0].x !== undefined && walls[0].vertices === undefined) {
+    walls = [{ vertices: walls, name: 'Wall 1' }];
+  }
   floorRegions = fp.floors ? JSON.parse(JSON.stringify(fp.floors)) : [];
   floorplanStripped = fp.stripped || false;
   originalFloorplanDataURL = fp.originalImage || null;
@@ -1519,7 +1525,7 @@ function switchToFloorplan(id) {
   stripBtn.textContent = floorplanStripped ? 'Restore Original' : 'Strip Background';
 
   // Update wall button state
-  if (wallClosed && wallVertices.length >= 3) {
+  if (walls.length > 0) {
     exitWallMode(); // sets the checkmark
   }
 
@@ -1563,7 +1569,6 @@ function addFloorplan(name, dataURL) {
     image: dataURL,
     points: [],
     walls: [],
-    wallClosed: false,
     floors: [],
     stripped: false,
     originalImage: null,
@@ -1573,8 +1578,8 @@ function addFloorplan(name, dataURL) {
   // Switch to the new floorplan
   activeFloorplanId = id;
   points = [];
-  wallVertices = [];
-  wallClosed = false;
+  walls = [];
+  wallCurrentVerts = [];
   floorRegions = [];
   floorplanStripped = false;
   originalFloorplanDataURL = null;
@@ -1608,8 +1613,8 @@ function deleteFloorplan(id) {
       activeFloorplanId = null;
       floorplanImg = null;
       points = [];
-      wallVertices = [];
-      wallClosed = false;
+      walls = [];
+      wallCurrentVerts = [];
       floorRegions = [];
       floorplanStripped = false;
       originalFloorplanDataURL = null;
@@ -1720,10 +1725,8 @@ function onMouseDown(e) {
     if (pos.x < 0 || pos.x > canvasW || pos.y < 0 || pos.y > canvasH) return;
 
     if (wallMode) {
-      wallVertices.push({ x: Math.round(pos.x), y: Math.round(pos.y) });
+      wallCurrentVerts.push({ x: Math.round(pos.x), y: Math.round(pos.y) });
       drawWallOverlay();
-      updateWallList();
-      saveData();
       return;
     }
 
@@ -2039,22 +2042,15 @@ function setMode(m) {
 // ── Wall Mode ──
 function toggleWallMode() {
   if (wallMode) {
-    // Exit wall mode — close polygon if enough vertices
-    if (wallVertices.length >= 3) {
-      wallClosed = true;
-      exitWallMode();
-      updateHeatmap();
-      saveData();
-      toast('Building outline set');
-    } else if (wallVertices.length > 0) {
-      toast('Need at least 3 points to form a wall outline');
-    } else {
-      exitWallMode();
+    // Exiting: close any in-progress wall first
+    if (wallCurrentVerts.length >= 3) {
+      closeCurrentWall();
     }
+    exitWallMode();
+    updateHeatmap();
   } else {
-    // Enter wall mode — keep existing vertices to allow editing
     wallMode = true;
-    wallClosed = false;  // re-open for editing
+    wallCurrentVerts = [];
     floorMode = false; exitFloorMode();  // mutual exclusion
     const btn = document.getElementById('wallBtn');
     btn.classList.add('primary');
@@ -2070,15 +2066,34 @@ function toggleWallMode() {
     canvasArea.style.cursor = 'crosshair';
     updateWallList();
     drawWallOverlay();
-    toast('Click around the building perimeter');
+    toast('Click around each wall area');
   }
+}
+
+function closeCurrentWall() {
+  if (wallCurrentVerts.length < 3) {
+    toast('Need at least 3 points');
+    return;
+  }
+  walls.push({
+    vertices: [...wallCurrentVerts],
+    name: 'Wall ' + (walls.length + 1),
+  });
+  wallCurrentVerts = [];
+  document.getElementById('wallCloseBtn').classList.add('hidden');
+  updateWallList();
+  drawWallOverlay();
+  saveData();
+  toast('Wall saved \u2014 trace the next one or click Done');
 }
 
 function exitWallMode() {
   wallMode = false;
+  wallCurrentVerts = [];
   const btn = document.getElementById('wallBtn');
   btn.classList.remove('primary');
   document.getElementById('wallSection').classList.add('hidden');
+  document.getElementById('wallCloseBtn').classList.add('hidden');
   canvasArea.style.cursor = '';
 
   const wallIcon = `
@@ -2088,8 +2103,8 @@ function exitWallMode() {
       <rect x="9" y="9" width="6" height="4" rx="0.5"/><rect x="5" y="13" width="6" height="2" rx="0.5"/>
     </svg>`;
 
-  if (wallClosed && wallVertices.length >= 3) {
-    btn.innerHTML = wallIcon + 'Walls ✓';
+  if (walls.length > 0) {
+    btn.innerHTML = wallIcon + 'Walls \u2713';
   } else {
     btn.innerHTML = wallIcon + 'Walls';
   }
@@ -2100,34 +2115,32 @@ function exitWallMode() {
 function updateWallList() {
   const list = document.getElementById('wallList');
   list.innerHTML = '';
-  if (!wallMode || wallVertices.length === 0) return;
-
-  wallVertices.forEach((v, i) => {
+  walls.forEach((w, i) => {
     const div = document.createElement('div');
-    div.className = 'wall-item';
+    div.style.cssText = 'display:flex; align-items:center; gap:6px; margin-bottom:4px; font-size:12px;';
     div.innerHTML = `
-      <span class="wall-dot"></span>
-      <span style="flex:1">Point ${i + 1}</span>
-      <button class="wall-del" data-idx="${i}" title="Delete">×</button>
+      <span style="width:8px;height:8px;border-radius:2px;background:rgba(59,130,246,0.6);flex-shrink:0"></span>
+      <span class="wname" contenteditable="true" spellcheck="false"
+            style="flex:1; padding:1px 4px; border:1px solid transparent; border-radius:3px; outline:none; cursor:text;">${escapeHtml(w.name)}</span>
+      <span style="color:var(--text-dim);font-size:10px">${w.vertices.length}pts</span>
+      <button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;padding:0 2px"
+              class="wall-del">\u00d7</button>
     `;
-    div.querySelector('.wall-del').addEventListener('click', (e) => {
-      e.stopPropagation();
-      wallVertices.splice(i, 1);
+    const nameEl = div.querySelector('.wname');
+    nameEl.addEventListener('blur', () => {
+      const n = nameEl.textContent.trim();
+      if (n) { walls[i].name = n; saveData(); if (wallMode) drawWallOverlay(); }
+    });
+    nameEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
+    });
+    div.querySelector('.wall-del').addEventListener('click', () => {
+      walls.splice(i, 1);
       updateWallList();
-      drawWallOverlay();
+      if (wallMode) drawWallOverlay();
+      updateHeatmap();
       saveData();
     });
-    // Highlight vertex on hover
-    div.addEventListener('mouseenter', () => {
-      drawWallOverlay();
-      ptCtx.save();
-      ptCtx.beginPath();
-      ptCtx.arc(v.x, v.y, 9, 0, Math.PI * 2);
-      ptCtx.fillStyle = 'rgba(59, 130, 246, 0.4)';
-      ptCtx.fill();
-      ptCtx.restore();
-    });
-    div.addEventListener('mouseleave', () => drawWallOverlay());
     list.appendChild(div);
   });
 }
@@ -2135,38 +2148,63 @@ function updateWallList() {
 function drawWallOverlay() {
   drawPoints();  // redraw points first
 
-  if (wallVertices.length === 0) return;
+  const blue = 'rgba(59, 130, 246,';
 
-  ptCtx.save();
-  ptCtx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
-  ptCtx.lineWidth = 3;
-  ptCtx.setLineDash(wallClosed ? [] : [8, 4]);
-  ptCtx.fillStyle = 'rgba(59, 130, 246, 0.08)';
+  // Draw completed wall polygons
+  walls.forEach((w) => {
+    if (!w.vertices || w.vertices.length < 3) return;
+    ptCtx.save();
+    ptCtx.strokeStyle = blue + '0.6)';
+    ptCtx.lineWidth = 2;
+    ptCtx.setLineDash([]);
+    ptCtx.fillStyle = blue + '0.05)';
+    ptCtx.beginPath();
+    ptCtx.moveTo(w.vertices[0].x, w.vertices[0].y);
+    for (let j = 1; j < w.vertices.length; j++) {
+      ptCtx.lineTo(w.vertices[j].x, w.vertices[j].y);
+    }
+    ptCtx.closePath();
+    ptCtx.stroke();
+    ptCtx.fill();
+    // Label
+    const cx = w.vertices.reduce((s, v) => s + v.x, 0) / w.vertices.length;
+    const cy = w.vertices.reduce((s, v) => s + v.y, 0) / w.vertices.length;
+    ptCtx.font = 'bold 14px DM Sans, sans-serif';
+    ptCtx.fillStyle = blue + '0.7)';
+    ptCtx.textAlign = 'center';
+    ptCtx.fillText(w.name, cx, cy);
+    ptCtx.restore();
+  });
 
-  ptCtx.beginPath();
-  ptCtx.moveTo(wallVertices[0].x, wallVertices[0].y);
-  for (let i = 1; i < wallVertices.length; i++) {
-    ptCtx.lineTo(wallVertices[i].x, wallVertices[i].y);
-  }
-  if (wallClosed) ptCtx.closePath();
-  ptCtx.stroke();
-  if (wallClosed || wallVertices.length >= 3) ptCtx.fill();
+  // Draw in-progress wall
+  if (wallMode && wallCurrentVerts.length > 0) {
+    ptCtx.save();
+    ptCtx.strokeStyle = blue + '0.8)';
+    ptCtx.lineWidth = 2;
+    ptCtx.setLineDash([6, 3]);
+    ptCtx.beginPath();
+    ptCtx.moveTo(wallCurrentVerts[0].x, wallCurrentVerts[0].y);
+    for (let j = 1; j < wallCurrentVerts.length; j++) {
+      ptCtx.lineTo(wallCurrentVerts[j].x, wallCurrentVerts[j].y);
+    }
+    ptCtx.stroke();
 
-  // Draw vertex dots (only in wall mode)
-  if (wallMode) {
-    wallVertices.forEach((v, i) => {
+    // Vertex dots
+    ptCtx.setLineDash([]);
+    wallCurrentVerts.forEach((v, i) => {
       ptCtx.beginPath();
       ptCtx.arc(v.x, v.y, 5, 0, Math.PI * 2);
       ptCtx.fillStyle = i === 0 ? '#3b82f6' : '#fff';
       ptCtx.fill();
       ptCtx.strokeStyle = '#3b82f6';
       ptCtx.lineWidth = 2;
-      ptCtx.setLineDash([]);
       ptCtx.stroke();
     });
-  }
+    ptCtx.restore();
 
-  ptCtx.restore();
+    // Show close button once we have 3+ vertices
+    document.getElementById('wallCloseBtn').classList.toggle('hidden', wallCurrentVerts.length < 3);
+  }
 }
 
 // ── Floor Regions ──
@@ -2581,15 +2619,18 @@ function drawHeatmap() {
   hmCtx.imageSmoothingEnabled = true;
   hmCtx.imageSmoothingQuality = 'high';
 
-  // Clip heatmap to wall polygon if set
-  if (wallClosed && wallVertices.length >= 3) {
+  // Clip heatmap to wall polygons if set
+  const closedWalls = walls.filter(w => w.vertices && w.vertices.length >= 3);
+  if (closedWalls.length > 0) {
     hmCtx.save();
     hmCtx.beginPath();
-    hmCtx.moveTo(wallVertices[0].x, wallVertices[0].y);
-    for (let i = 1; i < wallVertices.length; i++) {
-      hmCtx.lineTo(wallVertices[i].x, wallVertices[i].y);
+    for (const wall of closedWalls) {
+      hmCtx.moveTo(wall.vertices[0].x, wall.vertices[0].y);
+      for (let i = 1; i < wall.vertices.length; i++) {
+        hmCtx.lineTo(wall.vertices[i].x, wall.vertices[i].y);
+      }
+      hmCtx.closePath();
     }
-    hmCtx.closePath();
     hmCtx.clip();
     hmCtx.drawImage(offscreen, 0, 0, canvasW, canvasH);
     hmCtx.restore();
