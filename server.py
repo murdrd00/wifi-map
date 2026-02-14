@@ -11,7 +11,7 @@ import platform
 import re
 import os
 import sys
-import time
+
 import socketserver
 
 PORT = 8199
