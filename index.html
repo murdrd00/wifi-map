@@ -156,6 +156,55 @@
     line-height: 1.5;
     margin: 0;
   }
+  /* ── Network Selector ── */
+  .network-list { max-height: 260px; overflow-y: auto; }
+  .network-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.15s;
+  }
+  .network-item:hover { background: var(--border); }
+  .network-item.active { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+  .network-item .net-ssid {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+  }
+  .network-item .net-detail {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .network-item .net-signal {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    min-width: 48px;
+    text-align: right;
+  }
+  .network-item .net-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 1px;
+    height: 12px;
+  }
+  .network-item .net-bars span {
+    width: 3px;
+    background: var(--text-dim);
+    border-radius: 1px;
+    opacity: 0.25;
+  }
+  .network-item .net-bars span.filled { opacity: 1; }
+
   .info-section { margin-bottom: 10px; }
   .info-section:last-child { margin-bottom: 0; }
   .info-section h4 {
@@ -821,6 +870,12 @@
       </div>
     </div>
 
+    <!-- Network Selector -->
+    <div class="sidebar-section" id="networkSection" style="display:none">
+      <h3>Network <span style="font-size:11px; font-weight:400; color:var(--text-dim)" id="networkCount"></span></h3>
+      <div id="networkList" class="network-list"></div>
+    </div>
+
     <!-- Input Mode -->
     <div class="sidebar-section">
       <h3>Input Mode</h3>
@@ -974,6 +1029,8 @@ let floorplanImg = null;
 let points = [];
 let mode = 'auto';  // 'auto' or 'manual'
 let currentSignal = null;
+let selectedNetwork = null;   // null = connected network, or SSID string for a specific network
+let nearbyNetworks = [];      // list from last scan
 let wallMode = false;
 let wallVertices = [];
 let wallClosed = false;
@@ -1802,8 +1859,10 @@ async function placePoint(x, y) {
       const resp = await fetch('/api/scan');
       scanInfo = await resp.json();
       updateSignalDisplay(scanInfo);
-      if (scanInfo.signal_dbm !== null) {
-        dbm = scanInfo.signal_dbm;
+      // Use selected network's signal if one is picked
+      const display = getDisplayInfo(scanInfo);
+      if (display.signal_dbm !== null) {
+        dbm = display.signal_dbm;
       } else {
         dbm = -100;
         isDeadZone = true;
@@ -1816,17 +1875,18 @@ async function placePoint(x, y) {
     dbm = parseInt(document.getElementById('manualSlider').value);
   }
 
+  const display = scanInfo ? getDisplayInfo(scanInfo) : null;
   const point = {
     id: Date.now(),
     x: Math.round(x),
     y: Math.round(y),
     dbm: dbm,
     name: isDeadZone ? 'Dead zone' : null,
-    ssid: scanInfo?.ssid || currentSignal?.ssid || null,
-    band: scanInfo?.band || null,
-    channel: scanInfo?.channel || null,
-    link_speed: scanInfo?.link_speed || null,
-    noise_dbm: scanInfo?.noise_dbm || null,
+    ssid: display?.ssid || scanInfo?.ssid || currentSignal?.ssid || null,
+    band: display?.band || scanInfo?.band || null,
+    channel: display?.channel || scanInfo?.channel || null,
+    link_speed: display?.link_speed || scanInfo?.link_speed || null,
+    noise_dbm: display?.noise_dbm || scanInfo?.noise_dbm || null,
     timestamp: new Date().toISOString(),
   };
 
@@ -1846,14 +1906,22 @@ function updateSignalDisplay(info) {
   const ssid = document.getElementById('signalSSID');
   const bandEl = document.getElementById('signalBand');
 
-  if (info.signal_dbm !== null) {
-    big.textContent = info.signal_dbm;
-    big.style.color = signalColor(info.signal_dbm);
-    ssid.textContent = info.ssid || 'Unknown Network';
-    // Build detail line: band · channel · speed
-    const details = [info.band, info.channel ? `Ch ${info.channel}` : null, info.link_speed].filter(Boolean);
+  // Update nearby networks list
+  if (info.nearby_networks && info.nearby_networks.length > 0) {
+    nearbyNetworks = info.nearby_networks;
+    renderNetworkList();
+  }
+
+  // If a specific network is selected, show its signal from nearby_networks
+  const display = getDisplayInfo(info);
+
+  if (display.signal_dbm !== null) {
+    big.textContent = display.signal_dbm;
+    big.style.color = signalColor(display.signal_dbm);
+    ssid.textContent = display.ssid || 'Unknown Network';
+    const details = [display.band, display.channel ? `Ch ${display.channel}` : null, display.link_speed].filter(Boolean);
     bandEl.textContent = details.length > 0 ? details.join(' · ') : '';
-    setStatus('online', `${info.ssid || 'Connected'} · ${info.signal_dbm} dBm`);
+    setStatus('online', `${display.ssid || 'Connected'} · ${display.signal_dbm} dBm`);
   } else {
     big.textContent = '—';
     big.style.color = 'var(--text-dim)';
@@ -1861,6 +1929,93 @@ function updateSignalDisplay(info) {
     bandEl.textContent = '';
     setStatus('offline', info.error || 'No signal');
   }
+}
+
+function getDisplayInfo(info) {
+  // If no specific network selected, use the connected network (default)
+  if (!selectedNetwork) return info;
+  // Find the selected network in nearby_networks
+  const nets = info.nearby_networks || nearbyNetworks;
+  const net = nets.find(n => n.ssid === selectedNetwork);
+  if (!net) return info;
+  return {
+    ssid: net.ssid,
+    signal_dbm: net.signal_dbm,
+    signal_percent: net.signal_percent,
+    band: net.band,
+    channel: net.channel ? String(net.channel) : null,
+    noise_dbm: net.noise_dbm,
+    link_speed: null,
+  };
+}
+
+function signalBars(dbm) {
+  // Returns number of bars (1-4) based on signal
+  if (dbm >= -50) return 4;
+  if (dbm >= -60) return 3;
+  if (dbm >= -70) return 2;
+  return 1;
+}
+
+function renderNetworkList() {
+  const section = document.getElementById('networkSection');
+  const list = document.getElementById('networkList');
+  const countEl = document.getElementById('networkCount');
+  if (!nearbyNetworks.length) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  // Deduplicate by SSID (keep strongest signal per SSID)
+  const bySSID = new Map();
+  for (const n of nearbyNetworks) {
+    if (!n.ssid) continue;
+    const existing = bySSID.get(n.ssid);
+    if (!existing || n.signal_dbm > existing.signal_dbm) {
+      bySSID.set(n.ssid, n);
+    }
+  }
+  const unique = [...bySSID.values()].sort((a, b) => b.signal_dbm - a.signal_dbm);
+  countEl.textContent = `(${unique.length})`;
+
+  list.innerHTML = '';
+
+  // "Connected" option (default)
+  const connItem = document.createElement('div');
+  connItem.className = 'network-item' + (selectedNetwork === null ? ' active' : '');
+  const connSSID = currentSignal?.ssid || 'Connected Network';
+  const connDbm = currentSignal?.signal_dbm;
+  connItem.innerHTML = `
+    <span class="net-ssid">${escapeHtml(connSSID)}${currentSignal?.ssid ? '' : ''}</span>
+    <span class="net-detail">${currentSignal?.band || ''}</span>
+    <span class="net-signal" style="color:${connDbm != null ? signalColor(connDbm) : 'var(--text-dim)'}">${connDbm != null ? connDbm + ' dBm' : '—'}</span>
+  `;
+  connItem.onclick = () => selectNetwork(null);
+  list.appendChild(connItem);
+
+  // All visible networks
+  for (const n of unique) {
+    const item = document.createElement('div');
+    const isActive = selectedNetwork === n.ssid;
+    item.className = 'network-item' + (isActive ? ' active' : '');
+    const bars = signalBars(n.signal_dbm);
+    const barsHtml = [3,6,9,12].map((h,i) =>
+      `<span style="height:${h}px" class="${i < bars ? 'filled' : ''}"></span>`
+    ).join('');
+    item.innerHTML = `
+      <div class="net-bars">${barsHtml}</div>
+      <span class="net-ssid">${escapeHtml(n.ssid)}${n.is_connected ? ' <span style="font-size:10px;color:var(--accent)">●</span>' : ''}</span>
+      <span class="net-detail">${n.band || ''}</span>
+      <span class="net-signal" style="color:${signalColor(n.signal_dbm)}">${n.signal_dbm} dBm</span>
+    `;
+    item.onclick = () => selectNetwork(n.ssid);
+    list.appendChild(item);
+  }
+}
+
+function selectNetwork(ssid) {
+  selectedNetwork = ssid;
+  renderNetworkList();
+  // Re-display signal with the new selection
+  if (currentSignal) updateSignalDisplay(currentSignal);
 }
 
 function setStatus(state, text) {
@@ -2513,6 +2668,12 @@ function lerpColor(a, b, t) {
 function signalColor(dbm) {
   const c = dbmToColor(dbm);
   return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
 }
 
 // ── Data Persistence ──

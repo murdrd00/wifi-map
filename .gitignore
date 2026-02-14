@@ -18,5 +18,9 @@ __pycache__/
 *.swo
 *~
 
+# Compiled Swift binary (wifi_scan.swift is source, binary is built locally)
+wifi_scan
+!wifi_scan.swift
+
 # Claude Code
 .claude/
