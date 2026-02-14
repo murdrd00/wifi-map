@@ -495,6 +495,7 @@
     top: 0;
     left: 0;
   }
+  #map-canvas { z-index: 0; pointer-events: none; }
   #floorplan-canvas { z-index: 1; }
   #heatmap-canvas { z-index: 2; pointer-events: none; }
   #points-canvas { z-index: 3; pointer-events: none; }
@@ -871,6 +872,46 @@
         <button class="btn" style="width:100%; font-size:12px" onclick="stripFloorplanBg()" id="stripBgBtn" disabled>
           Strip Background
         </button>
+        <div class="dm-divider"></div>
+        <div class="dm-label">Satellite Map</div>
+        <div id="mapBtnRow">
+          <button class="btn" style="width:100%; font-size:12px" onclick="showMapAddressField()" id="mapLoadBtn">
+            Load Satellite Map
+          </button>
+        </div>
+        <div id="mapAddressRow" style="display:none">
+          <div class="dm-row" style="gap:4px">
+            <input type="text" id="mapAddressInput" placeholder="Enter address..."
+                   style="flex:1; padding:5px 8px; border-radius:5px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif"
+                   onkeydown="if(event.key==='Enter') loadSatelliteMap()">
+            <button class="btn" style="font-size:12px; padding:4px 10px" onclick="loadSatelliteMap()">Go</button>
+          </div>
+        </div>
+        <div id="mapControls" style="display:none">
+          <div class="dm-row">
+            <label>Map Opacity</label>
+            <input type="range" min="0" max="100" value="80" id="mapOpacitySlider"
+                   oninput="renderMapCanvas()">
+          </div>
+          <div class="dm-row">
+            <label>Visible</label>
+            <input type="checkbox" id="mapVisible" checked onchange="renderMapCanvas()">
+          </div>
+          <div class="dm-row">
+            <label>Outside only</label>
+            <input type="checkbox" id="mapOutsideOnly" onchange="renderMapCanvas()">
+          </div>
+          <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="startMapAlign()" id="mapAlignBtn">
+            Align to Floor Plan
+          </button>
+          <div id="mapAlignStatus" style="display:none; font-size:11px; color:var(--text-secondary); padding:4px 0; line-height:1.4"></div>
+          <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px; display:none" onclick="finishMapAlign()" id="mapAlignDoneBtn">
+            Done Aligning
+          </button>
+          <button class="btn" style="width:100%; font-size:12px" onclick="removeMap()">
+            Remove Map
+          </button>
+        </div>
       </div>
     </div>
     <div class="dropdown" id="infoDropdown">
@@ -997,6 +1038,7 @@
 
     <!-- Canvases -->
     <div class="canvas-container" id="canvasContainer">
+      <canvas id="map-canvas"></canvas>
       <canvas id="floorplan-canvas"></canvas>
       <canvas id="heatmap-canvas"></canvas>
       <canvas id="points-canvas"></canvas>
@@ -1122,6 +1164,19 @@ function snapWallPoint(cx, cy) {
     }
   }
 
+  // 1b) Check all perimeter vertices as endpoints
+  for (let fi = 0; fi < floorRegions.length; fi++) {
+    const verts = floorRegions[fi].vertices;
+    if (!verts) continue;
+    for (let vi = 0; vi < verts.length; vi++) {
+      const d = Math.hypot(cx - verts[vi].x, cy - verts[vi].y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = { x: verts[vi].x, y: verts[vi].y, type: 'perimeterVertex', floorIndex: fi, vertIndex: vi };
+      }
+    }
+  }
+
   // 2) Check nearest point on each wall line segment (only if no endpoint snap found)
   if (!best) {
     for (let i = 0; i < walls.length; i++) {
@@ -1136,6 +1191,26 @@ function snapWallPoint(cx, cy) {
       if (d < bestDist) {
         bestDist = d;
         best = { x: Math.round(px), y: Math.round(py), type: 'line', wallIndex: i };
+      }
+    }
+
+    // 2b) Check nearest point on each perimeter edge
+    for (let fi = 0; fi < floorRegions.length; fi++) {
+      const verts = floorRegions[fi].vertices;
+      if (!verts || verts.length < 2) continue;
+      for (let vi = 0; vi < verts.length; vi++) {
+        const a = verts[vi], b = verts[(vi + 1) % verts.length];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const lenSq = dx * dx + dy * dy;
+        if (lenSq < 1) continue;
+        let t = ((cx - a.x) * dx + (cy - a.y) * dy) / lenSq;
+        t = Math.max(0.01, Math.min(0.99, t)); // clamp away from vertices
+        const px = a.x + t * dx, py = a.y + t * dy;
+        const d = Math.hypot(cx - px, cy - py);
+        if (d < bestDist) {
+          bestDist = d;
+          best = { x: Math.round(px), y: Math.round(py), type: 'perimeterLine', floorIndex: fi, edgeIndex: vi };
+        }
       }
     }
   }
@@ -1160,13 +1235,31 @@ let dragMode = false;
 let lastMouse = { x: 0, y: 0 };
 let canvasW = 0, canvasH = 0;
 
+// ── Satellite Map State ──
+let mapTilesImage = null;      // offscreen canvas of stitched tiles
+let mapState = {
+  address: '', lat: 0, lng: 0, tileZoom: 19,
+  opacity: 0.8,
+  // Affine transform [a, b, c, d, tx, ty]: x' = a*x + c*y + tx, y' = b*x + d*y + ty
+  affine: null,                // null = no alignment yet, use default centering
+  visible: true, outsideOnly: false,
+  tilesDataURL: null,
+};
+// Multi-point alignment: alternating map click → floorplan click, as many pairs as needed
+let mapAlignMode = false;
+let mapAlignWaitingFor = 'map'; // 'map' or 'floorplan'
+let mapAlignPairs = [];         // [{mapPt: {x,y}, fpPt: {x,y}}, ...] completed pairs
+let mapAlignPendingMapPt = null; // map point waiting for its floorplan match
+
 // DOM refs
 const canvasArea = document.getElementById('canvasArea');
 const OVERLAY_PAD = 500;  // extra px around image for overlay drawing
 const container = document.getElementById('canvasContainer');
+const mapCanvas = document.getElementById('map-canvas');
 const fpCanvas = document.getElementById('floorplan-canvas');
 const hmCanvas = document.getElementById('heatmap-canvas');
 const ptCanvas = document.getElementById('points-canvas');
+const mapCtx = mapCanvas.getContext('2d');
 const fpCtx = fpCanvas.getContext('2d');
 const hmCtx = hmCanvas.getContext('2d');
 const ptCtx = ptCanvas.getContext('2d');
@@ -1219,6 +1312,24 @@ function loadSavedData(data) {
       accessPoints = fp.accessPoints ? JSON.parse(JSON.stringify(fp.accessPoints)) : [];
       floorplanStripped = fp.stripped || false;
       originalFloorplanDataURL = fp.originalImage || null;
+
+      // Load satellite map state
+      if (fp.mapState && fp.mapState.tilesDataURL) {
+        mapState = JSON.parse(JSON.stringify(fp.mapState));
+        const mapImg = new Image();
+        mapImg.onload = () => {
+          mapTilesImage = document.createElement('canvas');
+          mapTilesImage.width = mapImg.width;
+          mapTilesImage.height = mapImg.height;
+          mapTilesImage.getContext('2d').drawImage(mapImg, 0, 0);
+          syncMapControlsFromState();
+          document.getElementById('mapBtnRow').style.display = 'none';
+          document.getElementById('mapAddressRow').style.display = 'none';
+          document.getElementById('mapControls').style.display = '';
+          renderMapCanvas();
+        };
+        mapImg.src = mapState.tilesDataURL;
+      }
 
       if (walls.length > 0) { updateWallList(); exitWallMode(); }
       if (accessPoints.length > 0) { updateApList(); exitApMode(); }
@@ -1430,6 +1541,9 @@ function setupEventListeners() {
       }
     }
     if (e.key === 'Escape') {
+      if (mapAlignMode) {
+        cancelMapAlign();
+      }
       if (wallMode) {
         if (wallStartPoint) {
           // Cancel current start point, stay in wall mode
@@ -1589,6 +1703,8 @@ function loadFloorplanFromDataURL(dataURL, skipStripReset) {
 
     fpCanvas.width = hmCanvas.width = canvasW;
     fpCanvas.height = hmCanvas.height = canvasH;
+    mapCanvas.width = canvasW;
+    mapCanvas.height = canvasH;
     ptCanvas.width = canvasW + OVERLAY_PAD * 2;
     ptCanvas.height = canvasH + OVERLAY_PAD * 2;
     ptCanvas.style.left = -OVERLAY_PAD + 'px';
@@ -1606,6 +1722,7 @@ function loadFloorplanFromDataURL(dataURL, skipStripReset) {
 
     zoomFit();
     updateHeatmap();
+    renderMapCanvas();
     saveData();
   };
   img.src = dataURL;
@@ -1623,6 +1740,7 @@ function snapshotActiveFloorplan() {
   fp.accessPoints = JSON.parse(JSON.stringify(accessPoints));
   fp.stripped = floorplanStripped;
   fp.originalImage = originalFloorplanDataURL;
+  fp.mapState = mapTilesImage ? JSON.parse(JSON.stringify(mapState)) : null;
   // Save current floorplan image (with any strip changes)
   if (floorplanImg) {
     fp.image = fpCanvas.toDataURL(floorplanStripped ? 'image/png' : 'image/jpeg', 0.8);
@@ -1664,6 +1782,26 @@ function switchToFloorplan(id) {
   floorplanStripped = fp.stripped || false;
   originalFloorplanDataURL = fp.originalImage || null;
 
+  // Load satellite map state
+  if (fp.mapState && fp.mapState.tilesDataURL) {
+    mapState = JSON.parse(JSON.stringify(fp.mapState));
+    const mapImg = new Image();
+    mapImg.onload = () => {
+      mapTilesImage = document.createElement('canvas');
+      mapTilesImage.width = mapImg.width;
+      mapTilesImage.height = mapImg.height;
+      mapTilesImage.getContext('2d').drawImage(mapImg, 0, 0);
+      syncMapControlsFromState();
+      document.getElementById('mapBtnRow').style.display = 'none';
+      document.getElementById('mapAddressRow').style.display = 'none';
+      document.getElementById('mapControls').style.display = '';
+      renderMapCanvas();
+    };
+    mapImg.src = mapState.tilesDataURL;
+  } else {
+    clearMapState();
+  }
+
   // Update strip button state
   const stripBtn = document.getElementById('stripBgBtn');
   stripBtn.disabled = false;
@@ -1686,6 +1824,8 @@ function switchToFloorplan(id) {
 
     fpCanvas.width = hmCanvas.width = canvasW;
     fpCanvas.height = hmCanvas.height = canvasH;
+    mapCanvas.width = canvasW;
+    mapCanvas.height = canvasH;
     ptCanvas.width = canvasW + OVERLAY_PAD * 2;
     ptCanvas.height = canvasH + OVERLAY_PAD * 2;
     ptCanvas.style.left = -OVERLAY_PAD + 'px';
@@ -1700,6 +1840,7 @@ function switchToFloorplan(id) {
     updateFloorList();
     zoomFit();
     updateHeatmap();
+    renderMapCanvas();
     updateFpList();
     saveData();
   };
@@ -1721,6 +1862,7 @@ function addFloorplan(name, dataURL) {
     accessPoints: [],
     stripped: false,
     originalImage: null,
+    mapState: null,
   };
   floorplans.push(fp);
 
@@ -1877,6 +2019,12 @@ function onMouseDown(e) {
     e.preventDefault();
   } else if (e.button === 0 && !e.altKey) {
     const pos = screenToCanvas(e.clientX, e.clientY);
+
+    // Map 2-point alignment mode (after drag mode is handled above)
+    if (mapAlignMode) {
+      handleMapAlignClick(pos.x, pos.y);
+      return;
+    }
 
     if (floorMode) {
       floorCurrentVerts.push({ x: Math.round(pos.x), y: Math.round(pos.y) });
@@ -2292,6 +2440,431 @@ function setMode(m) {
     : 'Set signal strength with the slider, then click to place.';
 }
 
+// ── Satellite Map ──
+function showMapAddressField() {
+  document.getElementById('mapBtnRow').style.display = 'none';
+  document.getElementById('mapAddressRow').style.display = '';
+  const input = document.getElementById('mapAddressInput');
+  input.value = mapState.address || '';
+  setTimeout(() => input.focus(), 50);
+}
+
+async function geocodeAddress(address) {
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?' +
+      new URLSearchParams({ q: address, format: 'json', limit: '1' });
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': 'WiFiHeatmapBuilder/1.0' }
+    });
+    const results = await resp.json();
+    if (results.length === 0) return null;
+    return { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) };
+  } catch (e) {
+    console.error('Geocode error:', e);
+    return null;
+  }
+}
+
+function latLngToTile(lat, lng, zoom) {
+  const n = Math.pow(2, zoom);
+  const x = Math.floor((lng + 180) / 360 * n);
+  const latRad = lat * Math.PI / 180;
+  const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n);
+  return { x, y };
+}
+
+async function fetchAndStitchTiles(lat, lng, zoom) {
+  const TILE_SIZE = 256;
+  const GRID = 5;
+  const HALF = Math.floor(GRID / 2);
+  const center = latLngToTile(lat, lng, zoom);
+
+  const offscreen = document.createElement('canvas');
+  offscreen.width = GRID * TILE_SIZE;
+  offscreen.height = GRID * TILE_SIZE;
+  const ctx = offscreen.getContext('2d');
+
+  const promises = [];
+  for (let dy = -HALF; dy <= HALF; dy++) {
+    for (let dx = -HALF; dx <= HALF; dx++) {
+      const tx = center.x + dx;
+      const ty = center.y + dy;
+      const px = (dx + HALF) * TILE_SIZE;
+      const py = (dy + HALF) * TILE_SIZE;
+      const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${ty}/${tx}`;
+      promises.push(new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => { ctx.drawImage(img, px, py); resolve(); };
+        img.onerror = () => resolve(); // skip failed tiles
+        img.src = url;
+      }));
+    }
+  }
+  await Promise.all(promises);
+  return offscreen;
+}
+
+async function loadSatelliteMap() {
+  const address = document.getElementById('mapAddressInput').value.trim();
+  if (!address) return;
+
+  toast('Looking up address...');
+  const geo = await geocodeAddress(address);
+  if (!geo) { toast('Address not found'); return; }
+
+  mapState.address = address;
+  mapState.lat = geo.lat;
+  mapState.lng = geo.lng;
+
+  toast('Fetching satellite tiles...');
+  const img = await fetchAndStitchTiles(geo.lat, geo.lng, mapState.tileZoom);
+  if (!img) { toast('Failed to load tiles'); return; }
+
+  mapTilesImage = img;
+  mapState.tilesDataURL = img.toDataURL('image/jpeg', 0.75);
+
+  // Size map canvas to match floorplan
+  mapCanvas.width = canvasW;
+  mapCanvas.height = canvasH;
+
+  // Reset alignment for fresh load
+  mapState.affine = null;
+  mapState.opacity = 0.8;
+  mapState.visible = true;
+  mapState.outsideOnly = false;
+
+  // Show controls, hide address input
+  document.getElementById('mapAddressRow').style.display = 'none';
+  document.getElementById('mapControls').style.display = '';
+  document.getElementById('mapBtnRow').style.display = 'none';
+  syncMapControlsFromState();
+
+  renderMapCanvas();
+  saveData();
+  toast('Satellite map loaded');
+}
+
+function syncMapControlsFromState() {
+  document.getElementById('mapOpacitySlider').value = Math.round(mapState.opacity * 100);
+  document.getElementById('mapVisible').checked = mapState.visible;
+  document.getElementById('mapOutsideOnly').checked = mapState.outsideOnly;
+}
+
+function renderMapCanvas() {
+  if (!mapTilesImage) return;
+  if (!canvasW || !canvasH) return;
+
+  // Read control values (rotation/scale/offset are set by 2-point alignment, not sliders)
+  mapState.opacity = document.getElementById('mapOpacitySlider').value / 100;
+  mapState.visible = document.getElementById('mapVisible').checked;
+  mapState.outsideOnly = document.getElementById('mapOutsideOnly').checked;
+
+  // Ensure canvas matches floorplan
+  if (mapCanvas.width !== canvasW || mapCanvas.height !== canvasH) {
+    mapCanvas.width = canvasW;
+    mapCanvas.height = canvasH;
+  }
+  mapCtx.clearRect(0, 0, canvasW, canvasH);
+
+  if (!mapState.visible) return;
+
+  mapCtx.save();
+  mapCtx.globalAlpha = mapState.opacity;
+
+  if (mapState.affine) {
+    // Apply affine transform: maps map-image coords → canvas coords
+    const [a, b, c, d, tx, ty] = mapState.affine;
+    mapCtx.setTransform(a, b, c, d, tx, ty);
+  } else {
+    // No alignment yet — just center the tile image
+    const tw = mapTilesImage.width;
+    const th = mapTilesImage.height;
+    mapCtx.translate(canvasW / 2 - tw / 2, canvasH / 2 - th / 2);
+  }
+
+  mapCtx.drawImage(mapTilesImage, 0, 0);
+  mapCtx.restore();
+
+  // If "outside only", cut out the perimeter polygon(s)
+  if (mapState.outsideOnly) {
+    applyPerimeterCutout();
+  }
+
+}
+
+function drawAlignMarkers() {
+  ptCtx.save();
+  ptCtx.setTransform(1, 0, 0, 1, OVERLAY_PAD, OVERLAY_PAD);
+
+  function drawMarker(x, y, color, label) {
+    ptCtx.strokeStyle = color;
+    ptCtx.lineWidth = 2;
+    ptCtx.beginPath();
+    ptCtx.moveTo(x - 10, y); ptCtx.lineTo(x + 10, y);
+    ptCtx.moveTo(x, y - 10); ptCtx.lineTo(x, y + 10);
+    ptCtx.stroke();
+    ptCtx.beginPath();
+    ptCtx.arc(x, y, 6, 0, Math.PI * 2);
+    ptCtx.stroke();
+    ptCtx.font = 'bold 10px DM Sans, sans-serif';
+    ptCtx.fillStyle = color;
+    ptCtx.textAlign = 'left';
+    ptCtx.fillText(label, x + 10, y - 6);
+  }
+
+  // Draw completed pairs
+  for (let i = 0; i < mapAlignPairs.length; i++) {
+    const pair = mapAlignPairs[i];
+    const num = i + 1;
+    drawMarker(pair.mapCanvas.x, pair.mapCanvas.y, '#22d3ee', 'M' + num);
+    drawMarker(pair.fpPt.x, pair.fpPt.y, '#f97316', 'F' + num);
+    // Line connecting the pair
+    ptCtx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ptCtx.lineWidth = 1;
+    ptCtx.setLineDash([4, 3]);
+    ptCtx.beginPath();
+    ptCtx.moveTo(pair.mapCanvas.x, pair.mapCanvas.y);
+    ptCtx.lineTo(pair.fpPt.x, pair.fpPt.y);
+    ptCtx.stroke();
+    ptCtx.setLineDash([]);
+  }
+
+  // Draw pending map point (waiting for floorplan click)
+  if (mapAlignPendingMapPt) {
+    const num = mapAlignPairs.length + 1;
+    drawMarker(mapAlignPendingMapPt.canvasX, mapAlignPendingMapPt.canvasY, '#22d3ee', 'M' + num);
+  }
+
+  ptCtx.restore();
+}
+
+function applyPerimeterCutout() {
+  const perimeters = floorRegions.filter(f => f.vertices && f.vertices.length >= 3);
+  if (perimeters.length === 0) return;
+
+  mapCtx.save();
+  mapCtx.globalCompositeOperation = 'destination-out';
+  mapCtx.fillStyle = 'rgba(0,0,0,1)';
+
+  for (const perim of perimeters) {
+    mapCtx.beginPath();
+    mapCtx.moveTo(perim.vertices[0].x, perim.vertices[0].y);
+    for (let i = 1; i < perim.vertices.length; i++) {
+      mapCtx.lineTo(perim.vertices[i].x, perim.vertices[i].y);
+    }
+    mapCtx.closePath();
+    mapCtx.fill();
+  }
+
+  mapCtx.restore();
+}
+
+function startMapAlign() {
+  if (mapAlignMode) { cancelMapAlign(); return; }
+  mapAlignMode = true;
+  mapAlignWaitingFor = 'map';
+  mapAlignPairs = [];
+  mapAlignPendingMapPt = null;
+  // Exit other modes
+  if (wallMode) exitWallMode();
+  if (floorMode) exitFloorMode();
+  if (apMode) exitApMode();
+  canvasArea.style.cursor = 'crosshair';
+  document.getElementById('mapAlignBtn').classList.add('active');
+  document.getElementById('mapAlignBtn').textContent = 'Cancel Alignment';
+  document.getElementById('mapAlignDoneBtn').style.display = '';
+  updateAlignStatus();
+  // Close dropdown so user can see the map
+  document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+  toast('Click a recognizable point on the satellite map');
+}
+
+function cancelMapAlign() {
+  mapAlignMode = false;
+  mapAlignWaitingFor = 'map';
+  mapAlignPairs = [];
+  mapAlignPendingMapPt = null;
+  canvasArea.style.cursor = '';
+  document.getElementById('mapAlignBtn').classList.remove('active');
+  document.getElementById('mapAlignBtn').textContent = 'Align to Floor Plan';
+  document.getElementById('mapAlignDoneBtn').style.display = 'none';
+  document.getElementById('mapAlignStatus').style.display = 'none';
+  drawPoints(); // clear alignment markers
+}
+
+function finishMapAlign() {
+  if (mapAlignPairs.length < 1) {
+    toast('Need at least 1 point pair to align');
+    return;
+  }
+  computeMapAlignment();
+  cancelMapAlign();
+  renderMapCanvas();
+  saveData();
+  toast('Map aligned with ' + mapAlignPairs.length + ' point' + (mapAlignPairs.length > 1 ? 's' : '') + '!');
+  // cancelMapAlign clears pairs, but we already computed — that's fine
+}
+
+function updateAlignStatus() {
+  const el = document.getElementById('mapAlignStatus');
+  const n = mapAlignPairs.length;
+  if (mapAlignWaitingFor === 'map') {
+    el.style.display = '';
+    el.innerHTML = (n === 0 ? '①' : '⊕') + ' Click a point on the <b>satellite map</b>' +
+      (n > 0 ? `<br><span style="color:var(--accent)">${n} pair${n > 1 ? 's' : ''} placed — click Done when ready</span>` : '');
+  } else {
+    el.style.display = '';
+    el.innerHTML = '② Now click the same point on the <b>floor plan</b>';
+  }
+}
+
+function canvasToMapImg(canvasX, canvasY) {
+  // Reverse the current affine (or default centering) to get map-image coords
+  if (mapState.affine) {
+    const [a, b, c, d, tx, ty] = mapState.affine;
+    // Inverse of [a,b,c,d,tx,ty]: x' = a*imgX + c*imgY + tx → solve for imgX, imgY
+    const det = a * d - b * c;
+    if (Math.abs(det) < 1e-10) return { x: canvasX, y: canvasY };
+    const ix = (d * (canvasX - tx) - c * (canvasY - ty)) / det;
+    const iy = (-b * (canvasX - tx) + a * (canvasY - ty)) / det;
+    return { x: ix, y: iy };
+  } else {
+    // Default centering: translate(canvasW/2 - tw/2, canvasH/2 - th/2)
+    const tw = mapTilesImage.width, th = mapTilesImage.height;
+    return { x: canvasX - (canvasW / 2 - tw / 2), y: canvasY - (canvasH / 2 - th / 2) };
+  }
+}
+
+function handleMapAlignClick(canvasX, canvasY) {
+  if (mapAlignWaitingFor === 'map') {
+    // Convert canvas click to map-image coordinates
+    const imgPt = canvasToMapImg(canvasX, canvasY);
+    mapAlignPendingMapPt = { imgX: imgPt.x, imgY: imgPt.y, canvasX, canvasY };
+    mapAlignWaitingFor = 'floorplan';
+    updateAlignStatus();
+    drawPoints();
+    toast('Now click the same point on the floor plan');
+  } else {
+    // Floorplan click — complete the pair
+    mapAlignPairs.push({
+      mapPt: { x: mapAlignPendingMapPt.imgX, y: mapAlignPendingMapPt.imgY },
+      fpPt: { x: canvasX, y: canvasY },
+      mapCanvas: { x: mapAlignPendingMapPt.canvasX, y: mapAlignPendingMapPt.canvasY },
+    });
+    mapAlignPendingMapPt = null;
+    mapAlignWaitingFor = 'map';
+
+    // Live-update: compute and apply alignment after each completed pair
+    computeMapAlignment();
+    renderMapCanvas();
+    updateAlignStatus();
+    drawPoints();
+
+    const n = mapAlignPairs.length;
+    if (n === 1) {
+      toast('Pair 1 set (position). Add more pairs for rotation & scale, or click Done.');
+    } else if (n === 2) {
+      toast(n + ' pairs set (position + rotation + scale). Add more to refine, or click Done.');
+    } else {
+      toast(n + ' pairs — alignment refined. Add more or click Done.');
+    }
+  }
+}
+
+function computeMapAlignment() {
+  const n = mapAlignPairs.length;
+  if (n === 0) return;
+
+  if (n === 1) {
+    // 1 pair: translation only — map img point → floorplan point
+    const m = mapAlignPairs[0].mapPt;
+    const f = mapAlignPairs[0].fpPt;
+    // Affine: identity scale + translation
+    // x' = 1*imgX + 0*imgY + tx → tx = f.x - m.x
+    mapState.affine = [1, 0, 0, 1, f.x - m.x, f.y - m.y];
+    return;
+  }
+
+  // 2+ pairs: least-squares affine fit
+  // We want to find [a, b, c, d, tx, ty] such that for each pair:
+  //   a*mx + c*my + tx ≈ fx
+  //   b*mx + d*my + ty ≈ fy
+  // This is two independent least-squares problems:
+  //   [mx my 1] * [a  c  tx]^T = fx
+  //   [mx my 1] * [b  d  ty]^T = fy
+
+  // Build the normal equations: A^T * A * x = A^T * b
+  // where A is Nx3 matrix with rows [mx, my, 1]
+  let ata00 = 0, ata01 = 0, ata02 = 0;
+  let ata11 = 0, ata12 = 0, ata22 = 0;
+  let atbx0 = 0, atbx1 = 0, atbx2 = 0;
+  let atby0 = 0, atby1 = 0, atby2 = 0;
+
+  for (const pair of mapAlignPairs) {
+    const mx = pair.mapPt.x, my = pair.mapPt.y;
+    const fx = pair.fpPt.x, fy = pair.fpPt.y;
+    ata00 += mx * mx; ata01 += mx * my; ata02 += mx;
+    ata11 += my * my; ata12 += my;
+    ata22 += 1;
+    atbx0 += mx * fx; atbx1 += my * fx; atbx2 += fx;
+    atby0 += mx * fy; atby1 += my * fy; atby2 += fy;
+  }
+
+  // Solve 3x3 symmetric system via Cramer's rule
+  // Matrix: [[ata00, ata01, ata02], [ata01, ata11, ata12], [ata02, ata12, ata22]]
+  function solve3x3(m00, m01, m02, m11, m12, m22, r0, r1, r2) {
+    const det = m00 * (m11 * m22 - m12 * m12)
+              - m01 * (m01 * m22 - m12 * m02)
+              + m02 * (m01 * m12 - m11 * m02);
+    if (Math.abs(det) < 1e-12) return null;
+    const x = ((m11 * m22 - m12 * m12) * r0 + (m02 * m12 - m01 * m22) * r1 + (m01 * m12 - m02 * m11) * r2) / det;
+    const y = ((m02 * m12 - m01 * m22) * r0 + (m00 * m22 - m02 * m02) * r1 + (m01 * m02 - m00 * m12) * r2) / det;
+    const z = ((m01 * m12 - m02 * m11) * r0 + (m01 * m02 - m00 * m12) * r1 + (m00 * m11 - m01 * m01) * r2) / det;
+    return [x, y, z];
+  }
+
+  const solX = solve3x3(ata00, ata01, ata02, ata11, ata12, ata22, atbx0, atbx1, atbx2);
+  const solY = solve3x3(ata00, ata01, ata02, ata11, ata12, ata22, atby0, atby1, atby2);
+
+  if (!solX || !solY) {
+    toast('Could not compute alignment — points may be collinear');
+    return;
+  }
+
+  // solX = [a, c, tx], solY = [b, d, ty]
+  // Canvas setTransform(a, b, c, d, tx, ty): x' = a*x + c*y + tx
+  mapState.affine = [solX[0], solY[0], solX[1], solY[1], solX[2], solY[2]];
+}
+
+function removeMap() {
+  mapTilesImage = null;
+  mapState = {
+    address: '', lat: 0, lng: 0, tileZoom: 19,
+    opacity: 0.8, affine: null,
+    visible: true, outsideOnly: false,
+    tilesDataURL: null,
+  };
+  mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+
+  document.getElementById('mapControls').style.display = 'none';
+  document.getElementById('mapAddressRow').style.display = 'none';
+  document.getElementById('mapBtnRow').style.display = '';
+
+  if (mapAlignMode) cancelMapAlign();
+  saveData();
+  toast('Satellite map removed');
+}
+
+function clearMapState() {
+  mapTilesImage = null;
+  mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+  document.getElementById('mapControls').style.display = 'none';
+  document.getElementById('mapAddressRow').style.display = 'none';
+  document.getElementById('mapBtnRow').style.display = '';
+  if (mapAlignMode) cancelMapAlign();
+}
+
 // ── Wall Mode ──
 function toggleWallMode() {
   if (wallMode) {
@@ -2487,6 +3060,38 @@ function drawWallOverlay() {
       ptCtx.beginPath();
       ptCtx.arc(wallSnapResult.x, wallSnapResult.y, 5, 0, Math.PI * 2);
       ptCtx.fillStyle = '#22d3ee';
+      ptCtx.fill();
+      ptCtx.strokeStyle = '#fff';
+      ptCtx.lineWidth = 2;
+      ptCtx.stroke();
+    } else if (wallSnapResult.type === 'perimeterVertex') {
+      // Bright ring around snapped perimeter vertex (purple-tinted cyan)
+      ptCtx.beginPath();
+      ptCtx.arc(wallSnapResult.x, wallSnapResult.y, 8, 0, Math.PI * 2);
+      ptCtx.strokeStyle = '#a78bfa';
+      ptCtx.lineWidth = 2.5;
+      ptCtx.stroke();
+      // Inner dot
+      ptCtx.beginPath();
+      ptCtx.arc(wallSnapResult.x, wallSnapResult.y, 3, 0, Math.PI * 2);
+      ptCtx.fillStyle = '#a78bfa';
+      ptCtx.fill();
+    } else if (wallSnapResult.type === 'perimeterLine') {
+      // Highlight the perimeter edge being snapped to
+      const verts = floorRegions[wallSnapResult.floorIndex].vertices;
+      const a = verts[wallSnapResult.edgeIndex];
+      const b = verts[(wallSnapResult.edgeIndex + 1) % verts.length];
+      ptCtx.strokeStyle = 'rgba(167, 139, 250, 0.5)';
+      ptCtx.lineWidth = 5;
+      ptCtx.setLineDash([]);
+      ptCtx.beginPath();
+      ptCtx.moveTo(a.x, a.y);
+      ptCtx.lineTo(b.x, b.y);
+      ptCtx.stroke();
+      // Dot on the snap point
+      ptCtx.beginPath();
+      ptCtx.arc(wallSnapResult.x, wallSnapResult.y, 5, 0, Math.PI * 2);
+      ptCtx.fillStyle = '#a78bfa';
       ptCtx.fill();
       ptCtx.strokeStyle = '#fff';
       ptCtx.lineWidth = 2;
@@ -2865,6 +3470,7 @@ function updateHeatmap() {
   recalcWallStrengths();
   drawHeatmap();
   drawPoints();
+  renderMapCanvas(); // keep perimeter cutout in sync
 }
 
 // ── Wall Attenuation Helpers ──
@@ -3139,6 +3745,11 @@ function drawPoints() {
     ptCtx.fillText(ap.name, ap.x, ap.y - 20);
     ptCtx.restore();
   });
+
+  // Draw map alignment markers if in align mode
+  if (mapAlignMode && (mapAlignPairs.length > 0 || mapAlignPendingMapPt)) {
+    drawAlignMarkers();
+  }
 }
 
 // ── Color Mapping ──
