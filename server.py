@@ -26,8 +26,10 @@ def get_wifi_info():
         "signal_dbm": None,      # dBm (negative number, closer to 0 = better)
         "signal_percent": None,   # 0-100%
         "frequency": None,
+        "band": None,            # "2.4 GHz", "5 GHz", or "6 GHz"
         "channel": None,
         "link_speed": None,
+        "noise_dbm": None,       # Noise floor in dBm (macOS)
         "error": None,
     }
 
@@ -46,7 +48,7 @@ def get_wifi_info():
                         result["signal_dbm"] = dbm
                         result["signal_percent"] = max(0, min(100, 2 * (dbm + 100)))
                     elif line.startswith("agrCtlNoise:"):
-                        pass  # could track noise floor
+                        result["noise_dbm"] = int(line.split(":", 1)[1].strip())
                     elif line.startswith("channel:"):
                         result["channel"] = line.split(":", 1)[1].strip()
                     elif line.startswith("lastTxRate:"):
@@ -153,6 +155,30 @@ def get_wifi_info():
         result["error"] = "WiFi scan timed out"
     except Exception as e:
         result["error"] = str(e)
+
+    # Derive band from channel number if not already set
+    if result["band"] is None and result["channel"]:
+        try:
+            # Channel string might be "36" or "36,+1" (macOS bonded channels)
+            ch = int(re.split(r'[^0-9]', str(result["channel"]))[0])
+            if 1 <= ch <= 14:
+                result["band"] = "2.4 GHz"
+            elif 32 <= ch <= 177:
+                result["band"] = "5 GHz"
+            elif ch >= 1 and result.get("frequency") and "6" in str(result["frequency"]):
+                result["band"] = "6 GHz"
+        except (ValueError, IndexError):
+            pass
+
+    # Derive band from frequency string (Windows "Radio type" or "Band" field)
+    if result["band"] is None and result["frequency"]:
+        freq = str(result["frequency"]).lower()
+        if "2.4" in freq:
+            result["band"] = "2.4 GHz"
+        elif "5" in freq and "6" not in freq:
+            result["band"] = "5 GHz"
+        elif "6" in freq:
+            result["band"] = "6 GHz"
 
     # If we got nothing at all
     if result["signal_dbm"] is None and result["signal_percent"] is None and not result["error"]:

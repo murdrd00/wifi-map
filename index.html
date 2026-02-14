@@ -25,6 +25,22 @@
     --cyan: #06b6d4;
   }
 
+  [data-theme="light"] {
+    --bg: #f0f2f5;
+    --surface: #ffffff;
+    --surface2: #e8eaef;
+    --border: #d1d5db;
+    --text: #1f2937;
+    --text-dim: #6b7280;
+    --accent: #2563eb;
+    --accent-glow: rgba(37, 99, 235, 0.12);
+    --red: #dc2626;
+    --orange: #ea580c;
+    --yellow: #ca8a04;
+    --green: #16a34a;
+    --cyan: #0891b2;
+  }
+
   body {
     font-family: 'DM Sans', sans-serif;
     background: var(--bg);
@@ -192,6 +208,38 @@
   .btn.danger:hover { background: rgba(239,68,68,0.1); }
   .btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .btn .icon { font-size: 16px; line-height: 1; }
+  .btn-wrap { position: relative; }
+  .btn-tooltip {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    width: 220px;
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    z-index: 200;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    pointer-events: none;
+  }
+  .btn-tooltip::before {
+    content: '';
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+    width: 8px;
+    height: 8px;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+  }
+  .btn-wrap:hover .btn-tooltip { display: block; }
 
   /* ── Layout ── */
   .main {
@@ -543,6 +591,99 @@
   }
   .toast.show { transform: translateX(-50%) translateY(0); }
 
+  /* Floorplan dropdown list */
+  .fp-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 8px;
+  }
+  .fp-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    transition: background 0.1s;
+  }
+  .fp-item:hover { background: var(--surface2); }
+  .fp-item.active { background: var(--accent-glow); border: 1px solid var(--accent); }
+  .fp-item .fp-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    flex-shrink: 0;
+  }
+  .fp-item.active .fp-dot { background: var(--accent); }
+  .fp-item .fp-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .fp-item .fp-meta {
+    font-size: 10px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .fp-item .fp-del {
+    opacity: 0;
+    background: none;
+    border: none;
+    color: var(--red);
+    cursor: pointer;
+    font-size: 15px;
+    padding: 0 2px;
+    transition: opacity 0.1s;
+    flex-shrink: 0;
+  }
+  .fp-item:hover .fp-del { opacity: 1; }
+  .fp-empty {
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 12px 0;
+    font-style: italic;
+  }
+
+  /* Confirm dialog overlay */
+  .confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 500;
+  }
+  .confirm-dialog {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 360px;
+    width: 90%;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  }
+  .confirm-dialog h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .confirm-dialog p {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin-bottom: 16px;
+  }
+  .confirm-dialog .confirm-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
   /* Scrollbar */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -554,7 +695,7 @@
 <!-- Top Bar -->
 <div class="topbar">
   <div class="topbar-left">
-    <div class="logo">wifimap <span>v1.0</span></div>
+    <div class="logo">wifimap <span>v0.1</span></div>
     <div class="topbar-status">
       <div class="status-dot" id="statusDot"></div>
       <span id="statusText">Initializing...</span>
@@ -563,21 +704,27 @@
   <div class="topbar-actions">
     <button class="btn" onclick="exportData()" title="Export data as JSON">↓ Export</button>
     <button class="btn" onclick="importData()" title="Import saved data">↑ Import</button>
-    <button class="btn" id="wallBtn">
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-        <rect x="1" y="1" width="6" height="4" rx="0.5"/><rect x="9" y="1" width="6" height="4" rx="0.5"/>
-        <rect x="5" y="5" width="6" height="4" rx="0.5"/><rect x="1" y="9" width="6" height="4" rx="0.5"/>
-        <rect x="9" y="9" width="6" height="4" rx="0.5"/><rect x="5" y="13" width="6" height="2" rx="0.5"/>
-      </svg>
-      Walls
-    </button>
-    <button class="btn" id="floorBtn">
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-        <rect x="1" y="1" width="14" height="6" rx="1"/>
-        <rect x="1" y="9" width="14" height="6" rx="1"/>
-      </svg>
-      Floors
-    </button>
+    <div class="btn-wrap">
+      <button class="btn" id="wallBtn">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="1" y="1" width="6" height="4" rx="0.5"/><rect x="9" y="1" width="6" height="4" rx="0.5"/>
+          <rect x="5" y="5" width="6" height="4" rx="0.5"/><rect x="1" y="9" width="6" height="4" rx="0.5"/>
+          <rect x="9" y="9" width="6" height="4" rx="0.5"/><rect x="5" y="13" width="6" height="2" rx="0.5"/>
+        </svg>
+        Walls
+      </button>
+      <div class="btn-tooltip">Click points to draw a polygon around your building. The heatmap only renders inside the shape.</div>
+    </div>
+    <div class="btn-wrap">
+      <button class="btn" id="floorBtn">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="1" y="1" width="14" height="6" rx="1"/>
+          <rect x="1" y="9" width="14" height="6" rx="1"/>
+        </svg>
+        Floors
+      </button>
+      <div class="btn-tooltip">Click points to draw a polygon around each floor. Keeps signal data separate so one level doesn't bleed into another.</div>
+    </div>
     <div class="dropdown" id="displayDropdown">
       <button class="btn" onclick="toggleDropdown('displayDropdown')">Display ▾</button>
       <div class="dropdown-menu">
@@ -591,9 +738,40 @@
           <label>Points</label>
           <input type="checkbox" id="showPoints" checked onchange="updateHeatmap()">
         </div>
+        <div class="dm-row">
+          <label>Theme</label>
+          <button class="btn" style="font-size:12px; padding:4px 10px" onclick="toggleTheme()" id="themeBtn">
+            <svg id="themeSun" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="8" cy="8" r="3"/><line x1="8" y1="1" x2="8" y2="3"/><line x1="8" y1="13" x2="8" y2="15"/>
+              <line x1="1" y1="8" x2="3" y2="8"/><line x1="13" y1="8" x2="15" y2="8"/>
+              <line x1="3.05" y1="3.05" x2="4.46" y2="4.46"/><line x1="11.54" y1="11.54" x2="12.95" y2="12.95"/>
+              <line x1="3.05" y1="12.95" x2="4.46" y2="11.54"/><line x1="11.54" y1="4.46" x2="12.95" y2="3.05"/>
+            </svg>
+            <svg id="themeMoon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="display:none">
+              <path d="M13.5 8.5a5.5 5.5 0 0 1-7-7 5.5 5.5 0 1 0 7 7z"/>
+            </svg>
+            Light
+          </button>
+        </div>
+        <div class="dm-divider"></div>
+        <div class="dm-label">Floor Plan</div>
+        <button class="btn" style="width:100%; font-size:12px" onclick="stripFloorplanBg()" id="stripBgBtn" disabled>
+          Strip Background
+        </button>
       </div>
     </div>
-    <button class="btn" onclick="document.getElementById('floorplanInput').click()">⊞ Floor Plan</button>
+    <div class="dropdown" id="fpDropdown">
+      <button class="btn" onclick="toggleDropdown('fpDropdown')">⊞ Floor Plans ▾</button>
+      <div class="dropdown-menu" style="min-width: 260px;">
+        <div class="dm-label">Floor Plans</div>
+        <div class="fp-list" id="fpList">
+          <div class="fp-empty">No floor plans yet</div>
+        </div>
+        <button class="btn" style="width:100%; font-size:12px" onclick="document.getElementById('floorplanInput').click(); toggleDropdown('fpDropdown')">
+          + Upload Floor Plan
+        </button>
+      </div>
+    </div>
     <div class="dropdown" id="infoDropdown">
       <button class="btn" onclick="toggleDropdown('infoDropdown')">Info ▾</button>
       <div class="dropdown-menu" style="min-width: 260px;">
@@ -639,6 +817,7 @@
         <div class="signal-big" id="signalBig">—</div>
         <div class="signal-unit">dBm</div>
         <div class="signal-ssid" id="signalSSID">Not connected</div>
+        <div class="signal-ssid" id="signalBand" style="margin-top:4px; font-family:'JetBrains Mono',monospace; font-size:11px"></div>
       </div>
     </div>
 
@@ -755,6 +934,41 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// ── Theme ──
+function toggleTheme() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const btn = document.getElementById('themeBtn');
+  const sun = document.getElementById('themeSun');
+  const moon = document.getElementById('themeMoon');
+
+  if (isLight) {
+    document.documentElement.removeAttribute('data-theme');
+    sun.style.display = '';
+    moon.style.display = 'none';
+    btn.lastChild.textContent = ' Light';
+    localStorage.removeItem('wifimap-theme');
+  } else {
+    document.documentElement.setAttribute('data-theme', 'light');
+    sun.style.display = 'none';
+    moon.style.display = '';
+    btn.lastChild.textContent = ' Dark';
+    localStorage.setItem('wifimap-theme', 'light');
+  }
+}
+
+// Restore saved theme on load
+(function() {
+  if (localStorage.getItem('wifimap-theme') === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    const sun = document.getElementById('themeSun');
+    const moon = document.getElementById('themeMoon');
+    const btn = document.getElementById('themeBtn');
+    if (sun) sun.style.display = 'none';
+    if (moon) moon.style.display = '';
+    if (btn) btn.lastChild.textContent = ' Dark';
+  }
+})();
+
 // ── State ──
 let floorplanImg = null;
 let points = [];
@@ -766,6 +980,10 @@ let wallClosed = false;
 let floorMode = false;
 let floorRegions = [];       // [{vertices: [{x,y},...], name: 'Floor 1'}, ...]
 let floorCurrentVerts = [];  // vertices being drawn for current floor
+
+// Multi-floorplan management
+let floorplans = [];         // [{id, name, image, points, walls, wallClosed, floors, stripped, originalImage}, ...]
+let activeFloorplanId = null;
 
 // Canvas / viewport
 let zoom = 1;
@@ -802,6 +1020,42 @@ async function init() {
   try {
     const resp = await fetch('/api/data');
     const data = await resp.json();
+    loadSavedData(data);
+  } catch {}
+}
+
+function loadSavedData(data) {
+  if (data.version === 2 && data.floorplans) {
+    // New multi-floorplan format
+    floorplans = data.floorplans || [];
+    if (floorplans.length > 0) {
+      const targetId = data.activeFloorplanId || floorplans[0].id;
+      const fp = floorplans.find(f => f.id === targetId) || floorplans[0];
+      activeFloorplanId = fp.id;
+      points = fp.points ? JSON.parse(JSON.stringify(fp.points)) : [];
+      wallVertices = fp.walls ? JSON.parse(JSON.stringify(fp.walls)) : [];
+      wallClosed = fp.wallClosed || false;
+      floorRegions = fp.floors ? JSON.parse(JSON.stringify(fp.floors)) : [];
+      floorplanStripped = fp.stripped || false;
+      originalFloorplanDataURL = fp.originalImage || null;
+
+      if (wallClosed) exitWallMode();
+      if (floorRegions.length > 0) { updateFloorList(); exitFloorMode(); }
+      updatePointList();
+      updateFpList();
+
+      if (fp.image) {
+        loadFloorplanFromDataURL(fp.image);
+      }
+      // Update strip button
+      const stripBtn = document.getElementById('stripBgBtn');
+      if (fp.image) {
+        stripBtn.disabled = false;
+        stripBtn.textContent = floorplanStripped ? 'Restore Original' : 'Strip Background';
+      }
+    }
+  } else {
+    // Legacy v1 format — migrate to multi-floorplan
     if (data.points && data.points.length > 0) {
       points = data.points;
       updatePointList();
@@ -817,9 +1071,24 @@ async function init() {
       exitFloorMode();
     }
     if (data.floorplan) {
+      // Migrate: create a floorplan entry from legacy data
+      const id = Date.now();
+      floorplans = [{
+        id,
+        name: 'Floor Plan 1',
+        image: data.floorplan,
+        points: JSON.parse(JSON.stringify(points)),
+        walls: JSON.parse(JSON.stringify(wallVertices)),
+        wallClosed: wallClosed,
+        floors: JSON.parse(JSON.stringify(floorRegions)),
+        stripped: false,
+        originalImage: null,
+      }];
+      activeFloorplanId = id;
+      updateFpList();
       loadFloorplanFromDataURL(data.floorplan);
     }
-  } catch {}
+  }
 }
 
 function setupEventListeners() {
@@ -855,6 +1124,8 @@ function setupEventListeners() {
   document.getElementById('floorplanInput').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    // Derive a nice name from filename
+    const fpName = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim() || 'Floor Plan';
 
     if (file.type === 'application/pdf') {
       // Render PDF first page to image
@@ -872,7 +1143,7 @@ function setupEventListeners() {
           offscreen.height = viewport.height;
           const ctx = offscreen.getContext('2d');
           await page.render({ canvasContext: ctx, viewport }).promise;
-          loadFloorplanFromDataURL(offscreen.toDataURL('image/png'));
+          addFloorplan(fpName, offscreen.toDataURL('image/png'));
           toast('PDF loaded');
         } catch (err) {
           toast('Failed to load PDF');
@@ -883,10 +1154,12 @@ function setupEventListeners() {
     } else {
       const reader = new FileReader();
       reader.onload = (ev) => {
-        loadFloorplanFromDataURL(ev.target.result);
+        addFloorplan(fpName, ev.target.result);
       };
       reader.readAsDataURL(file);
     }
+    // Reset input so same file can be re-uploaded
+    e.target.value = '';
   });
 
   // Import
@@ -897,11 +1170,7 @@ function setupEventListeners() {
     reader.onload = (ev) => {
       try {
         const data = JSON.parse(ev.target.result);
-        if (data.points) points = data.points;
-        if (data.walls) { wallVertices = data.walls; wallClosed = data.wallClosed || false; if (wallClosed) exitWallMode(); }
-        if (data.floors) { floorRegions = data.floors; updateFloorList(); exitFloorMode(); }
-        if (data.floorplan) loadFloorplanFromDataURL(data.floorplan);
-        updatePointList();
+        loadSavedData(data);
         updateHeatmap();
         toast('Data imported');
       } catch { toast('Invalid file'); }
@@ -915,6 +1184,7 @@ function setupEventListeners() {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (!file) return;
+    const fpName = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim() || 'Floor Plan';
     if (file.type === 'application/pdf') {
       const reader = new FileReader();
       reader.onload = async (ev) => {
@@ -929,14 +1199,14 @@ function setupEventListeners() {
           offscreen.height = viewport.height;
           const ctx = offscreen.getContext('2d');
           await page.render({ canvasContext: ctx, viewport }).promise;
-          loadFloorplanFromDataURL(offscreen.toDataURL('image/png'));
+          addFloorplan(fpName, offscreen.toDataURL('image/png'));
           toast('PDF loaded');
         } catch { toast('Failed to load PDF'); }
       };
       reader.readAsArrayBuffer(file);
     } else if (file.type.startsWith('image/')) {
       const reader = new FileReader();
-      reader.onload = (ev) => loadFloorplanFromDataURL(ev.target.result);
+      reader.onload = (ev) => addFloorplan(fpName, ev.target.result);
       reader.readAsDataURL(file);
     }
   });
@@ -990,7 +1260,132 @@ function setupEventListeners() {
 }
 
 // ── Floor Plan ──
-function loadFloorplanFromDataURL(dataURL) {
+let floorplanStripped = false;
+let originalFloorplanDataURL = null; // stored so we can undo strip
+
+function stripFloorplanBg() {
+  if (!floorplanImg) return;
+
+  // If already stripped, restore original
+  if (floorplanStripped && originalFloorplanDataURL) {
+    const img = new Image();
+    img.onload = () => {
+      floorplanImg = img;
+      fpCtx.clearRect(0, 0, canvasW, canvasH);
+      fpCtx.drawImage(img, 0, 0);
+      floorplanStripped = false;
+      document.getElementById('stripBgBtn').textContent = 'Strip Background';
+      saveData();
+      toast('Original floor plan restored');
+    };
+    img.src = originalFloorplanDataURL;
+    return;
+  }
+
+  // Show loading state, then defer heavy work so the browser can paint
+  const btn = document.getElementById('stripBgBtn');
+  btn.disabled = true;
+  btn.textContent = 'Processing...';
+  setStatus('scanning', 'Stripping background...');
+
+  setTimeout(() => {
+    // Save original before stripping
+    originalFloorplanDataURL = fpCanvas.toDataURL('image/png');
+
+    const imageData = fpCtx.getImageData(0, 0, canvasW, canvasH);
+    const d = imageData.data;
+
+    // Sample corners + center to detect background color
+    const samples = [
+      0,
+      (canvasW - 1) * 4,
+      ((canvasH - 1) * canvasW) * 4,
+      ((canvasH - 1) * canvasW + canvasW - 1) * 4,
+      (Math.floor(canvasH / 2) * canvasW + Math.floor(canvasW / 2)) * 4,
+    ];
+
+    let lightCount = 0;
+    let darkCount = 0;
+    for (const idx of samples) {
+      const brightness = (d[idx] + d[idx + 1] + d[idx + 2]) / 3;
+      if (brightness > 128) lightCount++;
+      else darkCount++;
+    }
+
+    const bgIsLight = lightCount >= darkCount;
+    const threshold = 60;
+    const lineR = 55, lineG = 62, lineB = 78;
+
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i], g = d[i + 1], b = d[i + 2];
+      const brightness = (r + g + b) / 3;
+
+      if (bgIsLight) {
+        if (brightness > 255 - threshold) {
+          d[i + 3] = 0;
+        } else {
+          const t = 1 - brightness / 255;
+          d[i]     = Math.round(lineR + (1 - t) * (r - lineR));
+          d[i + 1] = Math.round(lineG + (1 - t) * (g - lineG));
+          d[i + 2] = Math.round(lineB + (1 - t) * (b - lineB));
+          d[i + 3] = Math.round(t * 255);
+        }
+      } else {
+        if (brightness < threshold) {
+          d[i + 3] = 0;
+        } else {
+          const t = brightness / 255;
+          d[i]     = Math.round(lineR + (1 - t) * (r - lineR));
+          d[i + 1] = Math.round(lineG + (1 - t) * (g - lineG));
+          d[i + 2] = Math.round(lineB + (1 - t) * (b - lineB));
+          d[i + 3] = Math.round(t * 255);
+        }
+      }
+    }
+
+    // Dilate: thicken lines by 1px so they survive zoom-out
+    const dilated = new Uint8ClampedArray(d.length);
+    for (let y = 0; y < canvasH; y++) {
+      for (let x = 0; x < canvasW; x++) {
+        const idx = (y * canvasW + x) * 4;
+        let maxA = d[idx + 3];
+        let bestIdx = idx;
+        for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+          const nx = x + dx, ny = y + dy;
+          if (nx >= 0 && nx < canvasW && ny >= 0 && ny < canvasH) {
+            const ni = (ny * canvasW + nx) * 4;
+            if (d[ni + 3] > maxA) {
+              maxA = d[ni + 3];
+              bestIdx = ni;
+            }
+          }
+        }
+        dilated[idx]     = d[bestIdx];
+        dilated[idx + 1] = d[bestIdx + 1];
+        dilated[idx + 2] = d[bestIdx + 2];
+        dilated[idx + 3] = maxA;
+      }
+    }
+    imageData.data.set(dilated);
+
+    fpCtx.putImageData(imageData, 0, 0);
+
+    const newImg = new Image();
+    newImg.onload = () => {
+      floorplanImg = newImg;
+      saveData();
+    };
+    newImg.src = fpCanvas.toDataURL('image/png');
+
+    floorplanStripped = true;
+    btn.textContent = 'Restore Original';
+    btn.disabled = false;
+    setStatus('online', currentSignal?.ssid ? `${currentSignal.ssid} · ${currentSignal.signal_dbm} dBm` : 'Connected');
+    toast(bgIsLight ? 'Stripped white background' : 'Stripped black background');
+  }, 50);
+}
+
+function loadFloorplanFromDataURL(dataURL, skipStripReset) {
   const img = new Image();
   img.onload = () => {
     floorplanImg = img;
@@ -1009,11 +1404,243 @@ function loadFloorplanFromDataURL(dataURL) {
     fpCtx.drawImage(img, 0, 0);
     document.getElementById('uploadOverlay').classList.add('hidden');
 
+    if (!skipStripReset) {
+      document.getElementById('stripBgBtn').disabled = false;
+      document.getElementById('stripBgBtn').textContent = floorplanStripped ? 'Restore Original' : 'Strip Background';
+    }
+
     zoomFit();
     updateHeatmap();
     saveData();
   };
   img.src = dataURL;
+}
+
+// ── Multi-Floorplan Management ──
+function snapshotActiveFloorplan() {
+  // Save current state into the active floorplan entry
+  if (activeFloorplanId === null) return;
+  const fp = floorplans.find(f => f.id === activeFloorplanId);
+  if (!fp) return;
+  fp.points = JSON.parse(JSON.stringify(points));
+  fp.walls = JSON.parse(JSON.stringify(wallVertices));
+  fp.wallClosed = wallClosed;
+  fp.floors = JSON.parse(JSON.stringify(floorRegions));
+  fp.stripped = floorplanStripped;
+  fp.originalImage = originalFloorplanDataURL;
+  // Save current floorplan image (with any strip changes)
+  if (floorplanImg) {
+    fp.image = fpCanvas.toDataURL(floorplanStripped ? 'image/png' : 'image/jpeg', 0.8);
+  }
+}
+
+function switchToFloorplan(id) {
+  if (id === activeFloorplanId) return;
+
+  // Exit any active modes
+  if (wallMode) exitWallMode();
+  if (floorMode) exitFloorMode();
+
+  // Save current state
+  snapshotActiveFloorplan();
+
+  // Load new floorplan
+  const fp = floorplans.find(f => f.id === id);
+  if (!fp) return;
+
+  activeFloorplanId = id;
+  points = fp.points ? JSON.parse(JSON.stringify(fp.points)) : [];
+  wallVertices = fp.walls ? JSON.parse(JSON.stringify(fp.walls)) : [];
+  wallClosed = fp.wallClosed || false;
+  floorRegions = fp.floors ? JSON.parse(JSON.stringify(fp.floors)) : [];
+  floorplanStripped = fp.stripped || false;
+  originalFloorplanDataURL = fp.originalImage || null;
+
+  // Update strip button state
+  const stripBtn = document.getElementById('stripBgBtn');
+  stripBtn.disabled = false;
+  stripBtn.textContent = floorplanStripped ? 'Restore Original' : 'Strip Background';
+
+  // Update wall button state
+  if (wallClosed && wallVertices.length >= 3) {
+    exitWallMode(); // sets the checkmark
+  }
+
+  // Load the image onto canvas
+  const img = new Image();
+  img.onload = () => {
+    floorplanImg = img;
+    canvasW = img.width;
+    canvasH = img.height;
+
+    fpCanvas.width = hmCanvas.width = canvasW;
+    fpCanvas.height = hmCanvas.height = canvasH;
+    ptCanvas.width = canvasW + OVERLAY_PAD * 2;
+    ptCanvas.height = canvasH + OVERLAY_PAD * 2;
+    ptCanvas.style.left = -OVERLAY_PAD + 'px';
+    ptCanvas.style.top = -OVERLAY_PAD + 'px';
+    container.style.width = canvasW + 'px';
+    container.style.height = canvasH + 'px';
+
+    fpCtx.drawImage(img, 0, 0);
+    document.getElementById('uploadOverlay').classList.add('hidden');
+
+    updatePointList();
+    updateFloorList();
+    zoomFit();
+    updateHeatmap();
+    updateFpList();
+    saveData();
+  };
+  img.src = fp.image;
+}
+
+function addFloorplan(name, dataURL) {
+  // If there's already an active floorplan, snapshot it first
+  snapshotActiveFloorplan();
+
+  const id = Date.now();
+  const fp = {
+    id,
+    name: name || 'Floor Plan ' + (floorplans.length + 1),
+    image: dataURL,
+    points: [],
+    walls: [],
+    wallClosed: false,
+    floors: [],
+    stripped: false,
+    originalImage: null,
+  };
+  floorplans.push(fp);
+
+  // Switch to the new floorplan
+  activeFloorplanId = id;
+  points = [];
+  wallVertices = [];
+  wallClosed = false;
+  floorRegions = [];
+  floorplanStripped = false;
+  originalFloorplanDataURL = null;
+
+  // Reset strip button
+  const stripBtn = document.getElementById('stripBgBtn');
+  stripBtn.textContent = 'Strip Background';
+
+  // Reset wall/floor buttons
+  exitWallMode();
+  exitFloorMode();
+
+  loadFloorplanFromDataURL(dataURL);
+  updateFpList();
+}
+
+function deleteFloorplan(id) {
+  const idx = floorplans.findIndex(f => f.id === id);
+  if (idx === -1) return;
+
+  const fp = floorplans[idx];
+  floorplans.splice(idx, 1);
+
+  if (activeFloorplanId === id) {
+    if (floorplans.length > 0) {
+      // Switch to first remaining floorplan
+      activeFloorplanId = null; // clear so switchTo doesn't snapshot the deleted one
+      switchToFloorplan(floorplans[0].id);
+    } else {
+      // No floorplans left - reset everything
+      activeFloorplanId = null;
+      floorplanImg = null;
+      points = [];
+      wallVertices = [];
+      wallClosed = false;
+      floorRegions = [];
+      floorplanStripped = false;
+      originalFloorplanDataURL = null;
+      canvasW = 0;
+      canvasH = 0;
+      fpCtx.clearRect(0, 0, fpCanvas.width, fpCanvas.height);
+      hmCtx.clearRect(0, 0, hmCanvas.width, hmCanvas.height);
+      ptCtx.setTransform(1, 0, 0, 1, 0, 0);
+      ptCtx.clearRect(0, 0, ptCanvas.width, ptCanvas.height);
+      document.getElementById('uploadOverlay').classList.remove('hidden');
+      document.getElementById('stripBgBtn').disabled = true;
+      document.getElementById('stripBgBtn').textContent = 'Strip Background';
+      exitWallMode();
+      exitFloorMode();
+      updatePointList();
+      updateFloorList();
+    }
+  }
+
+  updateFpList();
+  saveData();
+  toast(`Deleted "${fp.name}"`);
+}
+
+function updateFpList() {
+  const list = document.getElementById('fpList');
+  list.innerHTML = '';
+
+  if (floorplans.length === 0) {
+    list.innerHTML = '<div class="fp-empty">No floor plans yet</div>';
+    return;
+  }
+
+  floorplans.forEach(fp => {
+    const div = document.createElement('div');
+    div.className = 'fp-item' + (fp.id === activeFloorplanId ? ' active' : '');
+    const ptCount = fp.id === activeFloorplanId ? points.length : (fp.points ? fp.points.length : 0);
+    div.innerHTML = `
+      <span class="fp-dot"></span>
+      <span class="fp-name">${fp.name}</span>
+      <span class="fp-meta">${ptCount} pts</span>
+      <button class="fp-del" title="Delete">×</button>
+    `;
+    // Click to switch
+    div.addEventListener('click', (e) => {
+      if (e.target.classList.contains('fp-del')) return;
+      switchToFloorplan(fp.id);
+      toggleDropdown('fpDropdown'); // close dropdown after selecting
+    });
+    // Delete button
+    div.querySelector('.fp-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      showConfirm(
+        'Delete Floor Plan',
+        `Are you sure you want to delete "${fp.name}"? All its measurement points, walls, and floor data will be permanently lost.`,
+        () => deleteFloorplan(fp.id)
+      );
+    });
+    list.appendChild(div);
+  });
+}
+
+function showConfirm(title, message, onConfirm) {
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML = `
+    <div class="confirm-dialog">
+      <h3>${title}</h3>
+      <p>${message}</p>
+      <div class="confirm-actions">
+        <button class="btn" id="confirmCancel">Cancel</button>
+        <button class="btn danger" id="confirmOk">Delete</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#confirmCancel').addEventListener('click', () => {
+    overlay.remove();
+  });
+  overlay.querySelector('#confirmOk').addEventListener('click', () => {
+    overlay.remove();
+    onConfirm();
+  });
+  // Close on clicking backdrop
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
 }
 
 // ── Mouse / Pan / Zoom ──
@@ -1167,15 +1794,16 @@ function zoomFit() {
 async function placePoint(x, y) {
   let dbm;
   let isDeadZone = false;
+  let scanInfo = null;
 
   if (mode === 'auto') {
     setStatus('scanning', 'Scanning...');
     try {
       const resp = await fetch('/api/scan');
-      const info = await resp.json();
-      updateSignalDisplay(info);
-      if (info.signal_dbm !== null) {
-        dbm = info.signal_dbm;
+      scanInfo = await resp.json();
+      updateSignalDisplay(scanInfo);
+      if (scanInfo.signal_dbm !== null) {
+        dbm = scanInfo.signal_dbm;
       } else {
         dbm = -100;
         isDeadZone = true;
@@ -1194,7 +1822,11 @@ async function placePoint(x, y) {
     y: Math.round(y),
     dbm: dbm,
     name: isDeadZone ? 'Dead zone' : null,
-    ssid: currentSignal?.ssid || null,
+    ssid: scanInfo?.ssid || currentSignal?.ssid || null,
+    band: scanInfo?.band || null,
+    channel: scanInfo?.channel || null,
+    link_speed: scanInfo?.link_speed || null,
+    noise_dbm: scanInfo?.noise_dbm || null,
     timestamp: new Date().toISOString(),
   };
 
@@ -1202,7 +1834,9 @@ async function placePoint(x, y) {
   updatePointList();
   updateHeatmap();
   saveData();
-  toast(isDeadZone ? 'No signal — dead zone marked' : `Point added: ${dbm} dBm`);
+
+  const bandStr = point.band ? ` (${point.band})` : '';
+  toast(isDeadZone ? 'No signal — dead zone marked' : `Point added: ${dbm} dBm${bandStr}`);
 }
 
 // ── Signal Display ──
@@ -1210,16 +1844,21 @@ function updateSignalDisplay(info) {
   currentSignal = info;
   const big = document.getElementById('signalBig');
   const ssid = document.getElementById('signalSSID');
+  const bandEl = document.getElementById('signalBand');
 
   if (info.signal_dbm !== null) {
     big.textContent = info.signal_dbm;
     big.style.color = signalColor(info.signal_dbm);
     ssid.textContent = info.ssid || 'Unknown Network';
+    // Build detail line: band · channel · speed
+    const details = [info.band, info.channel ? `Ch ${info.channel}` : null, info.link_speed].filter(Boolean);
+    bandEl.textContent = details.length > 0 ? details.join(' · ') : '';
     setStatus('online', `${info.ssid || 'Connected'} · ${info.signal_dbm} dBm`);
   } else {
     big.textContent = '—';
     big.style.color = 'var(--text-dim)';
     ssid.textContent = info.error || 'Not connected';
+    bandEl.textContent = '';
     setStatus('offline', info.error || 'No signal');
   }
 }
@@ -1570,13 +2209,14 @@ function updatePointList() {
   points.forEach((p, i) => {
     const li = document.createElement('li');
     const name = p.name || `Point ${i + 1}`;
+    const bandTag = p.band ? `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:var(--surface2);color:var(--text-dim);margin-left:4px">${p.band}</span>` : '';
     li.innerHTML = `
       <div class="info">
         <div class="dot" style="background:${signalColor(p.dbm)}"></div>
         <span class="name" contenteditable="true" spellcheck="false"
               data-idx="${i}">${name}</span>
       </div>
-      <span class="dbm">${p.dbm} dBm</span>
+      <span class="dbm">${p.dbm} dBm${bandTag}</span>
       <button class="del-btn" data-id="${p.id}" title="Delete">×</button>
     `;
     // Rename on blur or enter
@@ -1599,8 +2239,30 @@ function updatePointList() {
       const id = Number(e.target.dataset.id);
       deletePoint(id);
     });
-    li.addEventListener('mouseenter', () => highlightPoint(i));
-    li.addEventListener('mouseleave', () => updateHeatmap());
+    li.addEventListener('mouseenter', (e) => {
+      highlightPoint(i);
+      // Show tooltip with details
+      const details = [`${p.dbm} dBm`];
+      if (p.band) details.push(p.band);
+      if (p.channel) details.push(`Ch ${p.channel}`);
+      if (p.link_speed) details.push(p.link_speed);
+      if (p.noise_dbm != null) details.push(`Noise: ${p.noise_dbm} dBm`);
+      if (p.ssid) details.push(p.ssid);
+      const tip = document.getElementById('tooltip');
+      tip.textContent = details.join(' · ');
+      tip.style.display = 'block';
+      tip.style.left = (e.clientX + 12) + 'px';
+      tip.style.top = (e.clientY - 10) + 'px';
+    });
+    li.addEventListener('mousemove', (e) => {
+      const tip = document.getElementById('tooltip');
+      tip.style.left = (e.clientX + 12) + 'px';
+      tip.style.top = (e.clientY - 10) + 'px';
+    });
+    li.addEventListener('mouseleave', () => {
+      updateHeatmap();
+      document.getElementById('tooltip').style.display = 'none';
+    });
     list.appendChild(li);
   });
 }
@@ -1855,12 +2517,13 @@ function signalColor(dbm) {
 
 // ── Data Persistence ──
 function saveData() {
+  // Snapshot current active floorplan before saving
+  snapshotActiveFloorplan();
+
   const data = {
-    points: points,
-    walls: wallVertices,
-    wallClosed: wallClosed,
-    floors: floorRegions,
-    floorplan: floorplanImg ? fpCanvas.toDataURL('image/jpeg', 0.8) : null,
+    version: 2,
+    activeFloorplanId: activeFloorplanId,
+    floorplans: floorplans,
   };
   fetch('/api/data', {
     method: 'POST',
@@ -1870,12 +2533,12 @@ function saveData() {
 }
 
 function exportData() {
+  snapshotActiveFloorplan();
+
   const data = {
-    points: points,
-    walls: wallVertices,
-    wallClosed: wallClosed,
-    floors: floorRegions,
-    floorplan: floorplanImg ? fpCanvas.toDataURL('image/jpeg', 0.8) : null,
+    version: 2,
+    activeFloorplanId: activeFloorplanId,
+    floorplans: floorplans,
     exported: new Date().toISOString(),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
