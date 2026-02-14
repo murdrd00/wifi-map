@@ -250,7 +250,20 @@ def get_wifi_info():
     if result["signal_dbm"] is None and result["signal_percent"] is None and not result["error"]:
         result["error"] = f"Could not read WiFi signal on {system}. Make sure WiFi is connected."
 
+    # Quick internet connectivity check (non-blocking, best-effort)
+    result["has_internet"] = _check_internet()
+
     return result
+
+
+def _check_internet():
+    """Quick check if we can reach the internet. Returns True/False/None."""
+    import urllib.request
+    try:
+        urllib.request.urlopen("http://captive.apple.com/hotspot-detect.html", timeout=3)
+        return True
+    except Exception:
+        return False
 
 
 def load_data():

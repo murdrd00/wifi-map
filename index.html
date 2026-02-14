@@ -615,6 +615,38 @@
     transition: background 0.1s;
   }
   .zoom-controls button:hover { background: var(--surface2); }
+  .zoom-controls button { position: relative; }
+  .zoom-controls button .ztip {
+    display: none;
+    position: absolute;
+    right: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    z-index: 200;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    pointer-events: none;
+  }
+  .zoom-controls button .ztip::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: -5px;
+    transform: translateY(-50%) rotate(45deg);
+    width: 8px;
+    height: 8px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+  }
+  .zoom-controls button:hover .ztip { display: block; }
+  .zoom-controls button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
   .zoom-label {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
@@ -755,14 +787,15 @@
     <button class="btn" onclick="importData()" title="Import saved data">↑ Import</button>
     <div class="btn-wrap">
       <button class="btn" id="wallBtn">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="1" y="1" width="6" height="4" rx="0.5"/><rect x="9" y="1" width="6" height="4" rx="0.5"/>
-          <rect x="5" y="5" width="6" height="4" rx="0.5"/><rect x="1" y="9" width="6" height="4" rx="0.5"/>
-          <rect x="9" y="9" width="6" height="4" rx="0.5"/><rect x="5" y="13" width="6" height="2" rx="0.5"/>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" stroke="none">
+          <rect x="0" y="0" width="5" height="3"/><rect x="6" y="0" width="5" height="3"/><rect x="12" y="0" width="4" height="3"/>
+          <rect x="0" y="4" width="1" height="3"/><rect x="2" y="4" width="5" height="3"/><rect x="8" y="4" width="5" height="3"/><rect x="14" y="4" width="2" height="3"/>
+          <rect x="0" y="8" width="5" height="3"/><rect x="6" y="8" width="5" height="3"/><rect x="12" y="8" width="4" height="3"/>
+          <rect x="0" y="12" width="1" height="4"/><rect x="2" y="12" width="5" height="4"/><rect x="8" y="12" width="5" height="4"/><rect x="14" y="12" width="2" height="4"/>
         </svg>
         Walls
       </button>
-      <div class="btn-tooltip">Click points to draw a polygon around your building. The heatmap only renders inside the shape.</div>
+      <div class="btn-tooltip">Draw interior walls as line segments. Walls affect how the heatmap blends signal across rooms.</div>
     </div>
     <div class="btn-wrap">
       <button class="btn" id="floorBtn">
@@ -770,9 +803,40 @@
           <rect x="1" y="1" width="14" height="6" rx="1"/>
           <rect x="1" y="9" width="14" height="6" rx="1"/>
         </svg>
-        Floors
+        Perimeter
       </button>
-      <div class="btn-tooltip">Click points to draw a polygon around each floor. Keeps signal data separate so one level doesn't bleed into another.</div>
+      <div class="btn-tooltip">Trace the perimeter of each floor or building on your floor plan.</div>
+    </div>
+    <div class="dropdown" id="apDropdown">
+      <button class="btn" onclick="toggleDropdown('apDropdown')">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="8" cy="10" r="2.5"/>
+          <path d="M4.5 7.5a5 5 0 0 1 7 0"/>
+          <path d="M2.5 5.5a8 8 0 0 1 11 0"/>
+        </svg>
+        APs ▾
+      </button>
+      <div class="dropdown-menu" style="min-width: 240px;">
+        <div class="dm-label">Access Points</div>
+        <div class="fp-list" id="apList">
+          <div class="fp-empty">No access points yet</div>
+        </div>
+        <button class="btn" style="width:100%; font-size:12px" id="apPlaceBtn">
+          + Place Access Point
+        </button>
+      </div>
+    </div>
+    <div class="dropdown" id="fpDropdown">
+      <button class="btn" onclick="toggleDropdown('fpDropdown')">⊞ Floor Plans ▾</button>
+      <div class="dropdown-menu" style="min-width: 260px;">
+        <div class="dm-label">Floor Plans</div>
+        <div class="fp-list" id="fpList">
+          <div class="fp-empty">No floor plans yet</div>
+        </div>
+        <button class="btn" style="width:100%; font-size:12px" onclick="document.getElementById('floorplanInput').click(); toggleDropdown('fpDropdown')">
+          + Upload Floor Plan
+        </button>
+      </div>
     </div>
     <div class="dropdown" id="displayDropdown">
       <button class="btn" onclick="toggleDropdown('displayDropdown')">Display ▾</button>
@@ -806,18 +870,6 @@
         <div class="dm-label">Floor Plan</div>
         <button class="btn" style="width:100%; font-size:12px" onclick="stripFloorplanBg()" id="stripBgBtn" disabled>
           Strip Background
-        </button>
-      </div>
-    </div>
-    <div class="dropdown" id="fpDropdown">
-      <button class="btn" onclick="toggleDropdown('fpDropdown')">⊞ Floor Plans ▾</button>
-      <div class="dropdown-menu" style="min-width: 260px;">
-        <div class="dm-label">Floor Plans</div>
-        <div class="fp-list" id="fpList">
-          <div class="fp-empty">No floor plans yet</div>
-        </div>
-        <button class="btn" style="width:100%; font-size:12px" onclick="document.getElementById('floorplanInput').click(); toggleDropdown('fpDropdown')">
-          + Upload Floor Plan
         </button>
       </div>
     </div>
@@ -867,6 +919,7 @@
         <div class="signal-unit">dBm</div>
         <div class="signal-ssid" id="signalSSID">Not connected</div>
         <div class="signal-ssid" id="signalBand" style="margin-top:4px; font-family:'JetBrains Mono',monospace; font-size:11px"></div>
+        <div id="internetStatus" style="margin-top:6px; font-size:11px; display:none"></div>
       </div>
     </div>
 
@@ -895,13 +948,10 @@
 
     <!-- Wall/Floor mode hints (shown when active) -->
     <div class="sidebar-section hidden" id="wallSection">
-      <h3>Tracing Walls</h3>
+      <h3>Drawing Walls</h3>
       <p style="font-size:11px; color:var(--text-dim); line-height:1.4; margin-bottom:8px" id="wallHint">
-        Click around each wall area. Click "Close Wall" to finish one, then trace the next. Click "Done" when finished. Ctrl+Z to undo.
+        Click to start a wall, click again to end it. Walls chain together. Double-click or Escape to stop. Ctrl+Z to undo last wall.
       </p>
-      <button class="btn primary hidden" style="width:100%; margin-top:6px" id="wallCloseBtn">
-        Close Wall &amp; Start Next
-      </button>
       <div id="wallList" style="margin-top:6px; max-height:120px; overflow-y:auto"></div>
       <button class="btn danger hidden" style="width:100%; margin-top:6px" id="wallClearBtn">
         Clear All Walls
@@ -909,16 +959,16 @@
     </div>
 
     <div class="sidebar-section hidden" id="floorSection">
-      <h3>Defining Floors</h3>
+      <h3>Defining Perimeter</h3>
       <p style="font-size:11px; color:var(--text-dim); line-height:1.4; margin-bottom:8px" id="floorHint">
-        Click around each floor area. Click "Close Floor" to finish one, then trace the next. Click "Done" when finished.
+        Click around the building perimeter. Click "Close Perimeter" to finish one, then trace the next. Click "Done" when finished.
       </p>
       <button class="btn primary hidden" style="width:100%; margin-top:6px" id="floorCloseBtn">
-        Close Floor &amp; Start Next
+        Close Perimeter &amp; Start Next
       </button>
       <div id="floorList" style="margin-top:6px"></div>
       <button class="btn danger hidden" style="width:100%; margin-top:6px" id="floorClearBtn">
-        Clear Floors
+        Clear Perimeters
       </button>
     </div>
 
@@ -954,10 +1004,11 @@
 
     <!-- Zoom Controls -->
     <div class="zoom-controls">
-      <button onclick="zoomIn()">+</button>
+      <button onclick="toggleDragMode()" id="dragBtn" style="font-size:16px">✋<span class="ztip">Drag mode</span></button>
+      <button onclick="zoomIn()">+<span class="ztip">Zoom in</span></button>
       <div class="zoom-label" id="zoomLabel">100%</div>
-      <button onclick="zoomOut()">−</button>
-      <button onclick="zoomFit()" title="Fit to screen" style="font-size:13px">⊡</button>
+      <button onclick="zoomOut()">−<span class="ztip">Zoom out</span></button>
+      <button onclick="zoomFit()" style="font-size:13px">⊡<span class="ztip">Fit to screen</span></button>
     </div>
   </div>
 </div>
@@ -1035,8 +1086,12 @@ let currentSignal = null;
 let selectedNetwork = null;   // null = connected network, or SSID string for a specific network
 let nearbyNetworks = [];      // list from last scan
 let wallMode = false;
-let walls = [];              // [{vertices: [{x,y},...], name: 'Wall 1'}, ...]
-let wallCurrentVerts = [];   // vertices being drawn for current in-progress wall
+let walls = [];              // [{x1, y1, x2, y2, name, strength}, ...]
+let wallStartPoint = null;   // {x, y} — first click of current segment
+let wallMousePos = null;     // {x, y} — live cursor position for preview line
+const WALL_ATTENUATION_MAX = 0.15; // weight multiplier at full wall strength (~-8 dB per wall)
+let apMode = false;
+let accessPoints = [];       // [{x, y, name, id}, ...]
 let floorMode = false;
 let floorRegions = [];       // [{vertices: [{x,y},...], name: 'Floor 1'}, ...]
 let floorCurrentVerts = [];  // vertices being drawn for current floor
@@ -1049,6 +1104,7 @@ let activeFloorplanId = null;
 let zoom = 1;
 let panX = 0, panY = 0;
 let isPanning = false;
+let dragMode = false;
 let lastMouse = { x: 0, y: 0 };
 let canvasW = 0, canvasH = 0;
 
@@ -1094,16 +1150,26 @@ function loadSavedData(data) {
       activeFloorplanId = fp.id;
       points = fp.points ? JSON.parse(JSON.stringify(fp.points)) : [];
       walls = fp.walls ? JSON.parse(JSON.stringify(fp.walls)) : [];
-      wallCurrentVerts = [];
-      // Migrate old format: flat vertex array → array of wall objects
-      if (walls.length > 0 && walls[0].x !== undefined && walls[0].vertices === undefined) {
-        walls = [{ vertices: walls, name: 'Wall 1' }];
-      }
       floorRegions = fp.floors ? JSON.parse(JSON.stringify(fp.floors)) : [];
+      // Migrate old polygon walls → perimeters + clear walls
+      if (walls.length > 0 && walls[0].vertices !== undefined) {
+        for (const w of walls) {
+          if (w.vertices && w.vertices.length >= 3) {
+            floorRegions.push({ vertices: w.vertices, name: w.name.replace(/Wall/g, 'Perimeter') });
+          }
+        }
+        walls = [];
+      } else if (walls.length > 0 && walls[0].x !== undefined && walls[0].x1 === undefined) {
+        // Very old flat [{x,y}] format
+        floorRegions.push({ vertices: walls, name: 'Perimeter 1' });
+        walls = [];
+      }
+      accessPoints = fp.accessPoints ? JSON.parse(JSON.stringify(fp.accessPoints)) : [];
       floorplanStripped = fp.stripped || false;
       originalFloorplanDataURL = fp.originalImage || null;
 
       if (walls.length > 0) { updateWallList(); exitWallMode(); }
+      if (accessPoints.length > 0) { updateApList(); exitApMode(); }
       if (floorRegions.length > 0) { updateFloorList(); exitFloorMode(); }
       updatePointList();
       updateFpList();
@@ -1125,11 +1191,11 @@ function loadSavedData(data) {
       updatePointList();
     }
     if (data.walls && data.walls.length > 0) {
-      // Legacy: walls was a flat vertex array
-      walls = [{ vertices: data.walls, name: 'Wall 1' }];
-      wallCurrentVerts = [];
-      updateWallList();
-      exitWallMode();
+      // Legacy v1: walls was a flat vertex array → migrate to perimeter
+      floorRegions.push({ vertices: data.walls, name: 'Perimeter 1' });
+      walls = [];
+      updateFloorList();
+      exitFloorMode();
     }
     if (data.floors && data.floors.length > 0) {
       floorRegions = data.floors;
@@ -1146,6 +1212,7 @@ function loadSavedData(data) {
         points: JSON.parse(JSON.stringify(points)),
         walls: JSON.parse(JSON.stringify(walls)),
         floors: JSON.parse(JSON.stringify(floorRegions)),
+        accessPoints: [],
         stripped: false,
         originalImage: null,
       }];
@@ -1162,15 +1229,20 @@ function setupEventListeners() {
 
   // Wall mode buttons
   document.getElementById('wallBtn').addEventListener('click', toggleWallMode);
-  document.getElementById('wallCloseBtn').addEventListener('click', closeCurrentWall);
   document.getElementById('wallClearBtn').addEventListener('click', () => {
     walls = [];
-    wallCurrentVerts = [];
+    wallStartPoint = null;
     exitWallMode();
     updateWallList();
     updateHeatmap();
     saveData();
     toast('Walls cleared');
+  });
+
+  // AP mode button
+  document.getElementById('apPlaceBtn').addEventListener('click', () => {
+    toggleDropdown('apDropdown'); // close dropdown
+    toggleApMode();
   });
 
   // Floor region buttons
@@ -1183,7 +1255,7 @@ function setupEventListeners() {
     updateFloorList();
     updateHeatmap();
     saveData();
-    toast('Floors cleared');
+    toast('Perimeters cleared');
   });
 
   // Floor plan upload
@@ -1282,6 +1354,7 @@ function setupEventListeners() {
   canvasArea.addEventListener('mousemove', onMouseMove);
   canvasArea.addEventListener('mouseup', onMouseUp);
   canvasArea.addEventListener('wheel', onWheel, { passive: false });
+  canvasArea.addEventListener('dblclick', onDoubleClick);
 
   // Touch for mobile
   canvasArea.addEventListener('touchstart', onTouchStart, { passive: false });
@@ -1295,25 +1368,34 @@ function setupEventListeners() {
       if (floorMode && floorCurrentVerts.length > 0) {
         floorCurrentVerts.pop();
         drawFloorOverlay();
-      } else if (wallMode && wallCurrentVerts.length > 0) {
-        wallCurrentVerts.pop();
+      } else if (wallMode && walls.length > 0) {
+        walls.pop();
+        updateWallList();
         drawWallOverlay();
+        saveData();
       } else {
         undoLastPoint();
       }
     }
     if (e.key === 'Escape') {
       if (wallMode) {
-        if (wallCurrentVerts.length >= 3) {
-          closeCurrentWall();
+        if (wallStartPoint) {
+          // Cancel current start point, stay in wall mode
+          wallStartPoint = null;
+          wallMousePos = null;
+          drawWallOverlay();
+        } else {
+          exitWallMode();
+          updateHeatmap();
+          saveData();
         }
-        exitWallMode();
-        updateHeatmap();
-        saveData();
       }
       if (floorMode) {
         exitFloorMode();
         updateHeatmap();
+      }
+      if (apMode) {
+        exitApMode();
       }
     }
   });
@@ -1485,6 +1567,7 @@ function snapshotActiveFloorplan() {
   fp.points = JSON.parse(JSON.stringify(points));
   fp.walls = JSON.parse(JSON.stringify(walls));
   fp.floors = JSON.parse(JSON.stringify(floorRegions));
+  fp.accessPoints = JSON.parse(JSON.stringify(accessPoints));
   fp.stripped = floorplanStripped;
   fp.originalImage = originalFloorplanDataURL;
   // Save current floorplan image (with any strip changes)
@@ -1499,6 +1582,7 @@ function switchToFloorplan(id) {
   // Exit any active modes
   if (wallMode) exitWallMode();
   if (floorMode) exitFloorMode();
+  if (apMode) exitApMode();
 
   // Save current state
   snapshotActiveFloorplan();
@@ -1510,12 +1594,20 @@ function switchToFloorplan(id) {
   activeFloorplanId = id;
   points = fp.points ? JSON.parse(JSON.stringify(fp.points)) : [];
   walls = fp.walls ? JSON.parse(JSON.stringify(fp.walls)) : [];
-  wallCurrentVerts = [];
-  // Migrate old format: flat vertex array → array of wall objects
-  if (walls.length > 0 && walls[0].x !== undefined && walls[0].vertices === undefined) {
-    walls = [{ vertices: walls, name: 'Wall 1' }];
-  }
   floorRegions = fp.floors ? JSON.parse(JSON.stringify(fp.floors)) : [];
+  // Migrate old polygon walls → perimeters + clear walls
+  if (walls.length > 0 && walls[0].vertices !== undefined) {
+    for (const w of walls) {
+      if (w.vertices && w.vertices.length >= 3) {
+        floorRegions.push({ vertices: w.vertices, name: w.name.replace(/Wall/g, 'Perimeter') });
+      }
+    }
+    walls = [];
+  } else if (walls.length > 0 && walls[0].x !== undefined && walls[0].x1 === undefined) {
+    floorRegions.push({ vertices: walls, name: 'Perimeter 1' });
+    walls = [];
+  }
+  accessPoints = fp.accessPoints ? JSON.parse(JSON.stringify(fp.accessPoints)) : [];
   floorplanStripped = fp.stripped || false;
   originalFloorplanDataURL = fp.originalImage || null;
 
@@ -1527,6 +1619,9 @@ function switchToFloorplan(id) {
   // Update wall button state
   if (walls.length > 0) {
     exitWallMode(); // sets the checkmark
+  }
+  if (accessPoints.length > 0) {
+    exitApMode(); // sets the checkmark
   }
 
   // Load the image onto canvas
@@ -1570,6 +1665,7 @@ function addFloorplan(name, dataURL) {
     points: [],
     walls: [],
     floors: [],
+    accessPoints: [],
     stripped: false,
     originalImage: null,
   };
@@ -1579,7 +1675,7 @@ function addFloorplan(name, dataURL) {
   activeFloorplanId = id;
   points = [];
   walls = [];
-  wallCurrentVerts = [];
+  wallStartPoint = null;
   floorRegions = [];
   floorplanStripped = false;
   originalFloorplanDataURL = null;
@@ -1588,9 +1684,10 @@ function addFloorplan(name, dataURL) {
   const stripBtn = document.getElementById('stripBgBtn');
   stripBtn.textContent = 'Strip Background';
 
-  // Reset wall/floor buttons
+  // Reset wall/floor/AP buttons
   exitWallMode();
   exitFloorMode();
+  exitApMode();
 
   loadFloorplanFromDataURL(dataURL);
   updateFpList();
@@ -1614,7 +1711,8 @@ function deleteFloorplan(id) {
       floorplanImg = null;
       points = [];
       walls = [];
-      wallCurrentVerts = [];
+      wallStartPoint = null;
+      accessPoints = [];
       floorRegions = [];
       floorplanStripped = false;
       originalFloorplanDataURL = null;
@@ -1658,11 +1756,21 @@ function updateFpList() {
       <span class="fp-meta">${ptCount} pts</span>
       <button class="fp-del" title="Delete">×</button>
     `;
-    // Click to switch
+    // Click: if already active → rename, otherwise switch
     div.addEventListener('click', (e) => {
       if (e.target.classList.contains('fp-del')) return;
-      switchToFloorplan(fp.id);
-      toggleDropdown('fpDropdown'); // close dropdown after selecting
+      if (fp.id === activeFloorplanId) {
+        // Already active — rename inline
+        const nameEl = div.querySelector('.fp-name');
+        startInlineRename(nameEl, fp.name, (newName) => {
+          fp.name = newName;
+          saveData();
+          updateFpList();
+        });
+      } else {
+        switchToFloorplan(fp.id);
+        toggleDropdown('fpDropdown');
+      }
     });
     // Delete button
     div.querySelector('.fp-del').addEventListener('click', (e) => {
@@ -1708,7 +1816,8 @@ function showConfirm(title, message, onConfirm) {
 // ── Mouse / Pan / Zoom ──
 function onMouseDown(e) {
   if (!floorplanImg) return;
-  if (e.button === 1 || e.button === 2 || (e.button === 0 && e.altKey)) {
+  if (e.target.closest('.zoom-controls')) return;
+  if (e.button === 1 || e.button === 2 || (e.button === 0 && e.altKey) || (e.button === 0 && dragMode)) {
     isPanning = true;
     lastMouse = { x: e.clientX, y: e.clientY };
     canvasArea.style.cursor = 'grabbing';
@@ -1724,9 +1833,62 @@ function onMouseDown(e) {
 
     if (pos.x < 0 || pos.x > canvasW || pos.y < 0 || pos.y > canvasH) return;
 
+    if (apMode) {
+      const ap = {
+        id: Date.now(),
+        x: Math.round(pos.x),
+        y: Math.round(pos.y),
+        name: 'AP ' + (accessPoints.length + 1),
+      };
+      accessPoints.push(ap);
+      updateApList();
+      drawPoints();
+      saveData();
+      toast('Access point placed');
+      return;
+    }
+
     if (wallMode) {
-      wallCurrentVerts.push({ x: Math.round(pos.x), y: Math.round(pos.y) });
+      const pt = { x: Math.round(pos.x), y: Math.round(pos.y) };
+      if (!wallStartPoint) {
+        // First click: set start point
+        wallStartPoint = pt;
+      } else {
+        // Second click: commit wall segment, chain (end becomes next start)
+        walls.push({
+          x1: wallStartPoint.x, y1: wallStartPoint.y,
+          x2: pt.x, y2: pt.y,
+          name: 'Wall ' + (walls.length + 1),
+          strength: 0.5,
+        });
+        wallStartPoint = pt;  // chain: end point becomes next start
+        updateWallList();
+        saveData();
+      }
       drawWallOverlay();
+      return;
+    }
+
+    // Check if click hit an existing AP or point — rename instead of placing new
+    const hitRadius = 18;
+    const hitAP = accessPoints.find(ap => Math.hypot(ap.x - pos.x, ap.y - pos.y) < hitRadius);
+    if (hitAP) {
+      showCanvasRename(e.clientX, e.clientY, hitAP.name, (newName) => {
+        hitAP.name = newName;
+        updateApList();
+        drawPoints();
+        saveData();
+      });
+      return;
+    }
+    const hitPt = points.find(p => Math.hypot(p.x - pos.x, p.y - pos.y) < hitRadius);
+    if (hitPt) {
+      showCanvasRename(e.clientX, e.clientY, hitPt.name || `Point`, (newName) => {
+        hitPt.name = newName;
+        updatePointList();
+        drawPoints();
+        saveData();
+      });
       return;
     }
 
@@ -1740,12 +1902,32 @@ function onMouseMove(e) {
     panY += e.clientY - lastMouse.y;
     lastMouse = { x: e.clientX, y: e.clientY };
     applyTransform();
+    return;
+  }
+  // Wall mode: track cursor for preview line
+  if (wallMode && wallStartPoint) {
+    const pos = screenToCanvas(e.clientX, e.clientY);
+    wallMousePos = { x: Math.round(pos.x), y: Math.round(pos.y) };
+    drawWallOverlay();
   }
 }
 
 function onMouseUp(e) {
   isPanning = false;
-  canvasArea.style.cursor = (floorMode || wallMode) ? 'crosshair' : '';
+  canvasArea.style.cursor = dragMode ? 'grab' : (floorMode || wallMode || apMode) ? 'crosshair' : '';
+}
+
+function onDoubleClick(e) {
+  if (!wallMode) return;
+  // Double-click stops wall chaining — remove the spurious segment from 2nd mousedown
+  if (walls.length > 0) {
+    walls.pop();
+    updateWallList();
+    saveData();
+  }
+  wallStartPoint = null;
+  wallMousePos = null;
+  drawWallOverlay();
 }
 
 function onWheel(e) {
@@ -1827,6 +2009,13 @@ function applyTransform() {
   document.getElementById('zoomLabel').textContent = Math.round(zoom * 100) + '%';
 }
 
+function toggleDragMode() {
+  dragMode = !dragMode;
+  const btn = document.getElementById('dragBtn');
+  btn.classList.toggle('active', dragMode);
+  canvasArea.style.cursor = dragMode ? 'grab' : '';
+}
+
 function zoomIn() { zoomToCenter(1.25); }
 function zoomOut() { zoomToCenter(1 / 1.25); }
 function zoomToCenter(factor) {
@@ -1890,6 +2079,7 @@ async function placePoint(x, y) {
     channel: display?.channel || scanInfo?.channel || null,
     link_speed: display?.link_speed || scanInfo?.link_speed || null,
     noise_dbm: display?.noise_dbm || scanInfo?.noise_dbm || null,
+    has_internet: scanInfo?.has_internet ?? null,
     timestamp: new Date().toISOString(),
   };
 
@@ -1931,6 +2121,18 @@ function updateSignalDisplay(info) {
     ssid.textContent = info.error || 'Not connected';
     bandEl.textContent = '';
     setStatus('offline', info.error || 'No signal');
+  }
+
+  // Internet connectivity indicator
+  const inetEl = document.getElementById('internetStatus');
+  if (info.has_internet === true) {
+    inetEl.style.display = '';
+    inetEl.innerHTML = '<span style="color:#22c55e">● Internet</span>';
+  } else if (info.has_internet === false) {
+    inetEl.style.display = '';
+    inetEl.innerHTML = '<span style="color:#ef4444">● No Internet</span>';
+  } else {
+    inetEl.style.display = 'none';
   }
 }
 
@@ -2042,23 +2244,22 @@ function setMode(m) {
 // ── Wall Mode ──
 function toggleWallMode() {
   if (wallMode) {
-    // Exiting: close any in-progress wall first
-    if (wallCurrentVerts.length >= 3) {
-      closeCurrentWall();
-    }
     exitWallMode();
     updateHeatmap();
   } else {
     wallMode = true;
-    wallCurrentVerts = [];
-    floorMode = false; exitFloorMode();  // mutual exclusion
+    wallStartPoint = null;
+    wallMousePos = null;
+    floorMode = false; exitFloorMode();
+    apMode = false; exitApMode();
     const btn = document.getElementById('wallBtn');
     btn.classList.add('primary');
     btn.innerHTML = `
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-        <rect x="1" y="1" width="6" height="4" rx="0.5"/><rect x="9" y="1" width="6" height="4" rx="0.5"/>
-        <rect x="5" y="5" width="6" height="4" rx="0.5"/><rect x="1" y="9" width="6" height="4" rx="0.5"/>
-        <rect x="9" y="9" width="6" height="4" rx="0.5"/><rect x="5" y="13" width="6" height="2" rx="0.5"/>
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" stroke="none">
+        <rect x="0" y="0" width="5" height="3"/><rect x="6" y="0" width="5" height="3"/><rect x="12" y="0" width="4" height="3"/>
+        <rect x="0" y="4" width="1" height="3"/><rect x="2" y="4" width="5" height="3"/><rect x="8" y="4" width="5" height="3"/><rect x="14" y="4" width="2" height="3"/>
+        <rect x="0" y="8" width="5" height="3"/><rect x="6" y="8" width="5" height="3"/><rect x="12" y="8" width="4" height="3"/>
+        <rect x="0" y="12" width="1" height="4"/><rect x="2" y="12" width="5" height="4"/><rect x="8" y="12" width="5" height="4"/><rect x="14" y="12" width="2" height="4"/>
       </svg>
       Done`;
     document.getElementById('wallSection').classList.remove('hidden');
@@ -2066,41 +2267,25 @@ function toggleWallMode() {
     canvasArea.style.cursor = 'crosshair';
     updateWallList();
     drawWallOverlay();
-    toast('Click around each wall area');
+    toast('Click to start a wall, click again to end it');
   }
-}
-
-function closeCurrentWall() {
-  if (wallCurrentVerts.length < 3) {
-    toast('Need at least 3 points');
-    return;
-  }
-  walls.push({
-    vertices: [...wallCurrentVerts],
-    name: 'Wall ' + (walls.length + 1),
-  });
-  wallCurrentVerts = [];
-  document.getElementById('wallCloseBtn').classList.add('hidden');
-  updateWallList();
-  drawWallOverlay();
-  saveData();
-  toast('Wall saved \u2014 trace the next one or click Done');
 }
 
 function exitWallMode() {
   wallMode = false;
-  wallCurrentVerts = [];
+  wallStartPoint = null;
+  wallMousePos = null;
   const btn = document.getElementById('wallBtn');
   btn.classList.remove('primary');
   document.getElementById('wallSection').classList.add('hidden');
-  document.getElementById('wallCloseBtn').classList.add('hidden');
   canvasArea.style.cursor = '';
 
   const wallIcon = `
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-      <rect x="1" y="1" width="6" height="4" rx="0.5"/><rect x="9" y="1" width="6" height="4" rx="0.5"/>
-      <rect x="5" y="5" width="6" height="4" rx="0.5"/><rect x="1" y="9" width="6" height="4" rx="0.5"/>
-      <rect x="9" y="9" width="6" height="4" rx="0.5"/><rect x="5" y="13" width="6" height="2" rx="0.5"/>
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" stroke="none">
+      <rect x="0" y="0" width="5" height="3"/><rect x="6" y="0" width="5" height="3"/><rect x="12" y="0" width="4" height="3"/>
+      <rect x="0" y="4" width="1" height="3"/><rect x="2" y="4" width="5" height="3"/><rect x="8" y="4" width="5" height="3"/><rect x="14" y="4" width="2" height="3"/>
+      <rect x="0" y="8" width="5" height="3"/><rect x="6" y="8" width="5" height="3"/><rect x="12" y="8" width="4" height="3"/>
+      <rect x="0" y="12" width="1" height="4"/><rect x="2" y="12" width="5" height="4"/><rect x="8" y="12" width="5" height="4"/><rect x="14" y="12" width="2" height="4"/>
     </svg>`;
 
   if (walls.length > 0) {
@@ -2119,10 +2304,9 @@ function updateWallList() {
     const div = document.createElement('div');
     div.style.cssText = 'display:flex; align-items:center; gap:6px; margin-bottom:4px; font-size:12px;';
     div.innerHTML = `
-      <span style="width:8px;height:8px;border-radius:2px;background:rgba(59,130,246,0.6);flex-shrink:0"></span>
+      <span style="width:8px;height:2px;background:#f97316;flex-shrink:0"></span>
       <span class="wname" contenteditable="true" spellcheck="false"
             style="flex:1; padding:1px 4px; border:1px solid transparent; border-radius:3px; outline:none; cursor:text;">${escapeHtml(w.name)}</span>
-      <span style="color:var(--text-dim);font-size:10px">${w.vertices.length}pts</span>
       <button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;padding:0 2px"
               class="wall-del">\u00d7</button>
     `;
@@ -2148,63 +2332,150 @@ function updateWallList() {
 function drawWallOverlay() {
   drawPoints();  // redraw points first
 
-  const blue = 'rgba(59, 130, 246,';
+  const orange = 'rgba(249, 115, 22,';
 
-  // Draw completed wall polygons
-  walls.forEach((w) => {
-    if (!w.vertices || w.vertices.length < 3) return;
+  // Draw perimeters faintly for context
+  floorRegions.forEach((f) => {
+    if (!f.vertices || f.vertices.length < 3) return;
     ptCtx.save();
-    ptCtx.strokeStyle = blue + '0.6)';
-    ptCtx.lineWidth = 2;
-    ptCtx.setLineDash([]);
-    ptCtx.fillStyle = blue + '0.05)';
+    ptCtx.strokeStyle = 'rgba(168, 85, 247, 0.3)';
+    ptCtx.lineWidth = 1.5;
+    ptCtx.setLineDash([6, 4]);
     ptCtx.beginPath();
-    ptCtx.moveTo(w.vertices[0].x, w.vertices[0].y);
-    for (let j = 1; j < w.vertices.length; j++) {
-      ptCtx.lineTo(w.vertices[j].x, w.vertices[j].y);
+    ptCtx.moveTo(f.vertices[0].x, f.vertices[0].y);
+    for (let j = 1; j < f.vertices.length; j++) {
+      ptCtx.lineTo(f.vertices[j].x, f.vertices[j].y);
     }
     ptCtx.closePath();
     ptCtx.stroke();
-    ptCtx.fill();
-    // Label
-    const cx = w.vertices.reduce((s, v) => s + v.x, 0) / w.vertices.length;
-    const cy = w.vertices.reduce((s, v) => s + v.y, 0) / w.vertices.length;
-    ptCtx.font = 'bold 14px DM Sans, sans-serif';
-    ptCtx.fillStyle = blue + '0.7)';
-    ptCtx.textAlign = 'center';
-    ptCtx.fillText(w.name, cx, cy);
     ptCtx.restore();
   });
 
-  // Draw in-progress wall
-  if (wallMode && wallCurrentVerts.length > 0) {
+  // Draw committed wall line segments
+  walls.forEach((w) => {
     ptCtx.save();
-    ptCtx.strokeStyle = blue + '0.8)';
-    ptCtx.lineWidth = 2;
-    ptCtx.setLineDash([6, 3]);
+    ptCtx.strokeStyle = orange + '0.8)';
+    ptCtx.lineWidth = 3;
+    ptCtx.setLineDash([]);
     ptCtx.beginPath();
-    ptCtx.moveTo(wallCurrentVerts[0].x, wallCurrentVerts[0].y);
-    for (let j = 1; j < wallCurrentVerts.length; j++) {
-      ptCtx.lineTo(wallCurrentVerts[j].x, wallCurrentVerts[j].y);
-    }
+    ptCtx.moveTo(w.x1, w.y1);
+    ptCtx.lineTo(w.x2, w.y2);
     ptCtx.stroke();
 
-    // Vertex dots
-    ptCtx.setLineDash([]);
-    wallCurrentVerts.forEach((v, i) => {
+    // Endpoint dots
+    [{ x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 }].forEach(pt => {
       ptCtx.beginPath();
-      ptCtx.arc(v.x, v.y, 5, 0, Math.PI * 2);
-      ptCtx.fillStyle = i === 0 ? '#3b82f6' : '#fff';
+      ptCtx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+      ptCtx.fillStyle = '#f97316';
       ptCtx.fill();
-      ptCtx.strokeStyle = '#3b82f6';
-      ptCtx.lineWidth = 2;
-      ptCtx.stroke();
     });
-    ptCtx.restore();
 
-    // Show close button once we have 3+ vertices
-    document.getElementById('wallCloseBtn').classList.toggle('hidden', wallCurrentVerts.length < 3);
+    // Label at midpoint
+    const mx = (w.x1 + w.x2) / 2;
+    const my = (w.y1 + w.y2) / 2;
+    ptCtx.font = '10px DM Sans, sans-serif';
+    ptCtx.fillStyle = orange + '0.7)';
+    ptCtx.textAlign = 'center';
+    ptCtx.fillText(w.name, mx, my - 6);
+    ptCtx.restore();
+  });
+
+  // Draw preview line from wallStartPoint to cursor
+  if (wallMode && wallStartPoint) {
+    ptCtx.save();
+    // Start point dot
+    ptCtx.beginPath();
+    ptCtx.arc(wallStartPoint.x, wallStartPoint.y, 5, 0, Math.PI * 2);
+    ptCtx.fillStyle = '#f97316';
+    ptCtx.fill();
+    ptCtx.strokeStyle = '#fff';
+    ptCtx.lineWidth = 2;
+    ptCtx.stroke();
+
+    // Preview line to cursor
+    if (wallMousePos) {
+      ptCtx.strokeStyle = orange + '0.4)';
+      ptCtx.lineWidth = 2;
+      ptCtx.setLineDash([6, 3]);
+      ptCtx.beginPath();
+      ptCtx.moveTo(wallStartPoint.x, wallStartPoint.y);
+      ptCtx.lineTo(wallMousePos.x, wallMousePos.y);
+      ptCtx.stroke();
+    }
+    ptCtx.restore();
   }
+}
+
+// ── Access Point Mode ──
+function toggleApMode() {
+  if (apMode) {
+    exitApMode();
+  } else {
+    apMode = true;
+    wallMode = false; exitWallMode();
+    floorMode = false; exitFloorMode();
+    canvasArea.style.cursor = 'crosshair';
+    drawPoints();
+    toast('Click on the map to place an access point. Press Escape when done.');
+  }
+}
+
+function exitApMode() {
+  apMode = false;
+  canvasArea.style.cursor = '';
+  updateApList();
+  drawPoints();
+}
+
+function updateApList() {
+  const list = document.getElementById('apList');
+  list.innerHTML = '';
+
+  if (accessPoints.length === 0) {
+    list.innerHTML = '<div class="fp-empty">No access points yet</div>';
+    return;
+  }
+
+  accessPoints.forEach((ap, i) => {
+    const div = document.createElement('div');
+    div.className = 'fp-item';
+    div.innerHTML = `
+      <span class="fp-dot" style="background:#22d3ee"></span>
+      <span class="fp-name">${escapeHtml(ap.name)}</span>
+      <button class="fp-del" title="Delete">\u00d7</button>
+    `;
+    // Click: rename inline, or highlight if clicking non-name area
+    div.addEventListener('click', (e) => {
+      if (e.target.classList.contains('fp-del')) return;
+      const nameEl = div.querySelector('.fp-name');
+      startInlineRename(nameEl, ap.name, (newName) => {
+        accessPoints[i].name = newName;
+        saveData();
+        updateApList();
+        drawPoints();
+      });
+    });
+    // Delete button
+    div.querySelector('.fp-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      accessPoints.splice(i, 1);
+      updateApList();
+      drawPoints();
+      saveData();
+    });
+    list.appendChild(div);
+  });
+}
+
+function highlightAP(idx) {
+  drawPoints();
+  const ap = accessPoints[idx];
+  if (!ap) return;
+  ptCtx.beginPath();
+  ptCtx.arc(ap.x, ap.y, 22, 0, Math.PI * 2);
+  ptCtx.strokeStyle = '#22d3ee';
+  ptCtx.lineWidth = 3;
+  ptCtx.stroke();
 }
 
 // ── Floor Regions ──
@@ -2220,6 +2491,7 @@ function toggleFloorMode() {
     floorMode = true;
     floorCurrentVerts = [];
     wallMode = false; exitWallMode();
+    apMode = false; exitApMode();
     const btn = document.getElementById('floorBtn');
     btn.classList.add('primary');
     btn.innerHTML = `
@@ -2231,7 +2503,7 @@ function toggleFloorMode() {
     document.getElementById('floorClearBtn').classList.remove('hidden');
     canvasArea.style.cursor = 'crosshair';
     drawFloorOverlay();
-    toast('Click around each floor area');
+    toast('Click around the building perimeter');
   }
 }
 
@@ -2242,14 +2514,14 @@ function closeCurrentFloor() {
   }
   floorRegions.push({
     vertices: [...floorCurrentVerts],
-    name: 'Floor ' + (floorRegions.length + 1),
+    name: 'Perimeter ' + (floorRegions.length + 1),
   });
   floorCurrentVerts = [];
   document.getElementById('floorCloseBtn').classList.add('hidden');
   updateFloorList();
   drawFloorOverlay();
   saveData();
-  toast('Floor saved — trace the next one or click Done');
+  toast('Perimeter saved — trace the next one or click Done');
 }
 
 function exitFloorMode() {
@@ -2266,9 +2538,9 @@ function exitFloorMode() {
   </svg>`;
 
   if (floorRegions.length > 0) {
-    btn.innerHTML = floorIcon + 'Floors ✓';
+    btn.innerHTML = floorIcon + 'Perimeter ✓';
   } else {
-    btn.innerHTML = floorIcon + 'Floors';
+    btn.innerHTML = floorIcon + 'Perimeter';
   }
   updateFloorList();
   drawPoints();
@@ -2499,8 +2771,52 @@ function highlightPoint(idx) {
 
 // ── Heatmap Rendering ──
 function updateHeatmap() {
+  recalcWallStrengths();
   drawHeatmap();
   drawPoints();
+}
+
+// ── Wall Attenuation Helpers ──
+function segmentsIntersect(ax, ay, bx, by, cx, cy, dx, dy) {
+  const det = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx);
+  if (Math.abs(det) < 1e-10) return false;
+  const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / det;
+  const u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / det;
+  return t > 0 && t < 1 && u > 0 && u < 1;
+}
+
+function countWallCrossings(ax, ay, bx, by) {
+  // Returns array of wall strengths for walls crossed between (ax,ay) and (bx,by)
+  const crossed = [];
+  for (const w of walls) {
+    if (segmentsIntersect(ax, ay, bx, by, w.x1, w.y1, w.x2, w.y2)) {
+      crossed.push(w.strength);
+    }
+  }
+  return crossed;
+}
+
+function recalcWallStrengths() {
+  if (walls.length === 0 || points.length < 2) return;
+  for (const wall of walls) {
+    let totalDrop = 0, count = 0;
+    for (let i = 0; i < points.length; i++) {
+      for (let j = i + 1; j < points.length; j++) {
+        if (!segmentsIntersect(
+          points[i].x, points[i].y, points[j].x, points[j].y,
+          wall.x1, wall.y1, wall.x2, wall.y2
+        )) continue;
+        const dist = Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y);
+        if (dist < 20) continue; // too close, skip
+        const dbmDiff = Math.abs(points[i].dbm - points[j].dbm);
+        // Normalize: 0 dBm diff = strength 0, 15+ dBm diff = strength 1
+        const normalized = Math.min(1, dbmDiff / 15);
+        totalDrop += normalized;
+        count++;
+      }
+    }
+    wall.strength = count > 0 ? totalDrop / count : 0.5; // default 0.5 if no data
+  }
 }
 
 function drawHeatmap() {
@@ -2597,7 +2913,15 @@ function drawHeatmap() {
           nearest = 0;
           break;
         }
-        const wt = 1 / Math.pow(dist, power);
+        let wt = 1 / Math.pow(dist, power);
+        // Apply wall attenuation: each wall crossed reduces weight
+        if (walls.length > 0) {
+          const crossed = countWallCrossings(rx, ry, pt.x, pt.y);
+          for (const str of crossed) {
+            const atten = 1.0 - str * (1.0 - WALL_ATTENUATION_MAX);
+            wt *= atten;
+          }
+        }
         weightSum += wt;
         valueSum += wt * pt.dbm;
       }
@@ -2619,15 +2943,15 @@ function drawHeatmap() {
   hmCtx.imageSmoothingEnabled = true;
   hmCtx.imageSmoothingQuality = 'high';
 
-  // Clip heatmap to wall polygons if set
-  const closedWalls = walls.filter(w => w.vertices && w.vertices.length >= 3);
-  if (closedWalls.length > 0) {
+  // Clip heatmap to perimeter polygons if set
+  const closedPerimeters = floorRegions.filter(f => f.vertices && f.vertices.length >= 3);
+  if (closedPerimeters.length > 0) {
     hmCtx.save();
     hmCtx.beginPath();
-    for (const wall of closedWalls) {
-      hmCtx.moveTo(wall.vertices[0].x, wall.vertices[0].y);
-      for (let i = 1; i < wall.vertices.length; i++) {
-        hmCtx.lineTo(wall.vertices[i].x, wall.vertices[i].y);
+    for (const perim of closedPerimeters) {
+      hmCtx.moveTo(perim.vertices[0].x, perim.vertices[0].y);
+      for (let i = 1; i < perim.vertices.length; i++) {
+        hmCtx.lineTo(perim.vertices[i].x, perim.vertices[i].y);
       }
       hmCtx.closePath();
     }
@@ -2677,6 +3001,53 @@ function drawPoints() {
     ptCtx.fillStyle = '#fff';
     ptCtx.fillText(label, p.x, p.y - 16);
   });
+
+  // Draw access point pins
+  accessPoints.forEach((ap) => {
+    ptCtx.save();
+    // Router icon background circle
+    ptCtx.beginPath();
+    ptCtx.arc(ap.x, ap.y, 14, 0, Math.PI * 2);
+    ptCtx.fillStyle = 'rgba(8, 145, 178, 0.9)';
+    ptCtx.fill();
+    ptCtx.strokeStyle = '#22d3ee';
+    ptCtx.lineWidth = 2;
+    ptCtx.stroke();
+
+    // WiFi icon inside
+    ptCtx.strokeStyle = '#fff';
+    ptCtx.lineWidth = 1.5;
+    ptCtx.lineCap = 'round';
+    // Dot
+    ptCtx.beginPath();
+    ptCtx.arc(ap.x, ap.y + 3, 1.5, 0, Math.PI * 2);
+    ptCtx.fillStyle = '#fff';
+    ptCtx.fill();
+    // Arc 1
+    ptCtx.beginPath();
+    ptCtx.arc(ap.x, ap.y + 3, 5, -Math.PI * 0.8, -Math.PI * 0.2);
+    ptCtx.stroke();
+    // Arc 2
+    ptCtx.beginPath();
+    ptCtx.arc(ap.x, ap.y + 3, 9, -Math.PI * 0.75, -Math.PI * 0.25);
+    ptCtx.stroke();
+
+    // Label
+    ptCtx.font = 'bold 10px DM Sans, sans-serif';
+    ptCtx.textAlign = 'center';
+    const metrics = ptCtx.measureText(ap.name);
+    const lw = metrics.width + 8;
+    const lh = 14;
+    const lx = ap.x - lw / 2;
+    const ly = ap.y - 30;
+    ptCtx.fillStyle = 'rgba(8, 145, 178, 0.85)';
+    ptCtx.beginPath();
+    ptCtx.roundRect(lx, ly, lw, lh, 3);
+    ptCtx.fill();
+    ptCtx.fillStyle = '#fff';
+    ptCtx.fillText(ap.name, ap.x, ap.y - 20);
+    ptCtx.restore();
+  });
 }
 
 // ── Color Mapping ──
@@ -2715,6 +3086,91 @@ function escapeHtml(str) {
   const d = document.createElement('div');
   d.textContent = str;
   return d.innerHTML;
+}
+
+function showCanvasRename(clientX, clientY, currentName, onCommit) {
+  // Remove any existing rename popup
+  document.querySelectorAll('.canvas-rename').forEach(el => el.remove());
+
+  const popup = document.createElement('div');
+  popup.className = 'canvas-rename';
+  popup.style.cssText = `
+    position: fixed; left: ${clientX + 8}px; top: ${clientY - 16}px; z-index: 999;
+    background: var(--surface); border: 1px solid var(--accent); border-radius: 6px;
+    padding: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  `;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = currentName;
+  input.style.cssText = `
+    background: var(--surface2); border: none; color: var(--text); padding: 4px 8px;
+    border-radius: 4px; font-size: 12px; font-family: inherit; width: 140px; outline: none;
+  `;
+  popup.appendChild(input);
+  document.body.appendChild(popup);
+  input.focus();
+  input.select();
+
+  let done = false;
+  function commit() {
+    if (done) return; done = true;
+    const newName = input.value.trim();
+    popup.remove();
+    if (newName && newName !== currentName) onCommit(newName);
+  }
+  function cancel() {
+    if (done) return; done = true;
+    popup.remove();
+  }
+
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') commit();
+    if (e.key === 'Escape') cancel();
+  });
+  input.addEventListener('blur', () => setTimeout(() => { if (!done) cancel(); }, 120));
+  // Prevent click on popup from propagating to canvas
+  popup.addEventListener('mousedown', (e) => e.stopPropagation());
+}
+
+function startInlineRename(el, currentName, onCommit) {
+  // Turn a static element into an inline text field for renaming
+  el.setAttribute('contenteditable', 'true');
+  el.style.outline = '1px solid var(--accent)';
+  el.style.borderRadius = '3px';
+  el.style.padding = '0 4px';
+  el.style.cursor = 'text';
+  el.textContent = currentName;
+  el.focus();
+  // Select all text
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  function commit() {
+    const newName = el.textContent.trim();
+    el.removeAttribute('contenteditable');
+    el.style.outline = '';
+    el.style.padding = '';
+    el.style.cursor = '';
+    el.removeEventListener('blur', commit);
+    el.removeEventListener('keydown', onKey);
+    if (newName && newName !== currentName) {
+      onCommit(newName);
+    } else {
+      el.textContent = currentName;
+    }
+  }
+  function onKey(e) {
+    if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+    if (e.key === 'Escape') { el.textContent = currentName; el.blur(); }
+    e.stopPropagation(); // prevent shortcuts while editing
+  }
+  el.addEventListener('blur', commit);
+  el.addEventListener('keydown', onKey);
+  el.addEventListener('mousedown', (e) => e.stopPropagation(), { once: true });
 }
 
 // ── Data Persistence ──
