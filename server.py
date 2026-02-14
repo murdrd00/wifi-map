@@ -258,15 +258,15 @@ def main():
     print(f"\n  Testing WiFi scan on {platform.system()}...")
     info = get_wifi_info()
     if info["error"]:
-        print(f"  ⚠  Warning: {info['error']}")
+        print(f"  [!] Warning: {info['error']}")
         print("  You can still use manual signal entry mode.\n")
     else:
-        print(f"  ✓  Connected to: {info['ssid']}")
-        print(f"  ✓  Signal: {info['signal_dbm']} dBm ({info['signal_percent']}%)\n")
+        print(f"  [+] Connected to: {info['ssid']}")
+        print(f"  [+] Signal: {info['signal_dbm']} dBm ({info['signal_percent']}%)\n")
 
     with socketserver.TCPServer(("", PORT), HeatmapHandler) as httpd:
-        print(f"  → Open http://localhost:{PORT} in your browser")
-        print(f"  → Press Ctrl+C to stop\n")
+        print(f"  Open http://localhost:{PORT} in your browser")
+        print(f"  Press Ctrl+C to stop\n")
         print("=" * 60)
         try:
             httpd.serve_forever()

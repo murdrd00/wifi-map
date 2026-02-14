@@ -80,6 +80,89 @@
   .topbar-actions {
     display: flex;
     gap: 8px;
+    align-items: center;
+  }
+
+  /* ── Dropdown ── */
+  .dropdown {
+    position: relative;
+  }
+  .dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    min-width: 220px;
+    z-index: 200;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+  }
+  .dropdown-menu.left-align {
+    right: auto;
+    left: 0;
+  }
+  .dropdown.open .dropdown-menu { display: block; }
+  .dropdown-menu .dm-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 8px;
+  }
+  .dropdown-menu .dm-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .dropdown-menu .dm-row label {
+    font-size: 13px;
+    color: var(--text-dim);
+    min-width: 55px;
+  }
+  .dropdown-menu .dm-row input[type=range] {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+  .dropdown-menu .dm-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 10px 0;
+  }
+  .dropdown-menu p {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin: 0;
+  }
+  .info-section { margin-bottom: 10px; }
+  .info-section:last-child { margin-bottom: 0; }
+  .info-section h4 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .info-table {
+    width: 100%;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .info-table td {
+    padding: 3px 0;
+    color: var(--text-dim);
+  }
+  .info-table .swatch {
+    width: 12px; height: 12px;
+    border-radius: 3px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 6px;
   }
 
   /* ── Buttons ── */
@@ -480,7 +563,68 @@
   <div class="topbar-actions">
     <button class="btn" onclick="exportData()" title="Export data as JSON">↓ Export</button>
     <button class="btn" onclick="importData()" title="Import saved data">↑ Import</button>
+    <button class="btn" id="wallBtn">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="1" y="1" width="6" height="4" rx="0.5"/><rect x="9" y="1" width="6" height="4" rx="0.5"/>
+        <rect x="5" y="5" width="6" height="4" rx="0.5"/><rect x="1" y="9" width="6" height="4" rx="0.5"/>
+        <rect x="9" y="9" width="6" height="4" rx="0.5"/><rect x="5" y="13" width="6" height="2" rx="0.5"/>
+      </svg>
+      Walls
+    </button>
+    <button class="btn" id="floorBtn">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="1" y="1" width="14" height="6" rx="1"/>
+        <rect x="1" y="9" width="14" height="6" rx="1"/>
+      </svg>
+      Floors
+    </button>
+    <div class="dropdown" id="displayDropdown">
+      <button class="btn" onclick="toggleDropdown('displayDropdown')">Display ▾</button>
+      <div class="dropdown-menu">
+        <div class="dm-label">Display Settings</div>
+        <div class="dm-row">
+          <label>Opacity</label>
+          <input type="range" min="0" max="100" value="65" id="opacitySlider"
+                 oninput="updateHeatmap()">
+        </div>
+        <div class="dm-row">
+          <label>Points</label>
+          <input type="checkbox" id="showPoints" checked onchange="updateHeatmap()">
+        </div>
+      </div>
+    </div>
     <button class="btn" onclick="document.getElementById('floorplanInput').click()">⊞ Floor Plan</button>
+    <div class="dropdown" id="infoDropdown">
+      <button class="btn" onclick="toggleDropdown('infoDropdown')">Info ▾</button>
+      <div class="dropdown-menu" style="min-width: 260px;">
+        <div class="info-section">
+          <div class="dm-label">Signal Strength</div>
+          <div class="legend-bar" style="height:14px; border-radius:7px; margin-bottom:6px;"></div>
+          <div class="legend-labels" style="margin-bottom:10px;">
+            <span>Dead</span>
+            <span>-80</span>
+            <span>-60</span>
+            <span>-40</span>
+            <span>-30</span>
+          </div>
+        </div>
+        <div class="dm-divider"></div>
+        <div class="info-section">
+          <h4>What do dBm values mean?</h4>
+          <table class="info-table">
+            <tr><td><span class="swatch" style="background:#06b6d4"></span>-30 to -40</td><td>Excellent — streaming, video calls</td></tr>
+            <tr><td><span class="swatch" style="background:#22c55e"></span>-40 to -55</td><td>Good — reliable for most tasks</td></tr>
+            <tr><td><span class="swatch" style="background:#eab308"></span>-55 to -70</td><td>Fair — browsing OK, may lag</td></tr>
+            <tr><td><span class="swatch" style="background:#f97316"></span>-70 to -85</td><td>Weak — spotty connection</td></tr>
+            <tr><td><span class="swatch" style="background:#7f1d1d"></span>-85 to -100</td><td>Dead zone — no usable signal</td></tr>
+          </table>
+        </div>
+        <div class="dm-divider"></div>
+        <div class="info-section">
+          <p>dBm (decibels relative to milliwatt) measures WiFi signal power. Values closer to 0 are stronger. Each 3 dBm increase doubles the power.</p>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -515,35 +659,21 @@
       </div>
     </div>
 
-    <!-- Wall Outline -->
-    <div class="sidebar-section">
-      <button class="btn" style="width:100%" id="wallBtn">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="1" y="1" width="6" height="4" rx="0.5"/><rect x="9" y="1" width="6" height="4" rx="0.5"/>
-          <rect x="5" y="5" width="6" height="4" rx="0.5"/><rect x="1" y="9" width="6" height="4" rx="0.5"/>
-          <rect x="9" y="9" width="6" height="4" rx="0.5"/><rect x="5" y="13" width="6" height="2" rx="0.5"/>
-        </svg>
-        Trace Building Walls
-      </button>
-      <p style="font-size:11px; color:var(--text-dim); line-height:1.4; margin-top:6px" id="wallHint" class="hidden">
-        Click around the building perimeter. Click the button again to close the shape. Ctrl+Z to undo last point.
+    <!-- Wall/Floor mode hints (shown when active) -->
+    <div class="sidebar-section hidden" id="wallSection">
+      <h3>Tracing Walls</h3>
+      <p style="font-size:11px; color:var(--text-dim); line-height:1.4; margin-bottom:8px" id="wallHint">
+        Click around the building perimeter. Click the Walls button again to close the shape. Ctrl+Z to undo last point.
       </p>
-      <div id="wallList" style="margin-top:6px; max-height:120px; overflow-y:auto"></div>
+      <div id="wallList" style="max-height:120px; overflow-y:auto"></div>
       <button class="btn danger hidden" style="width:100%; margin-top:6px" id="wallClearBtn">
         Clear Walls
       </button>
     </div>
 
-    <!-- Floor Regions -->
-    <div class="sidebar-section">
-      <button class="btn" style="width:100%" id="floorBtn">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="1" y="1" width="14" height="6" rx="1"/>
-          <rect x="1" y="9" width="14" height="6" rx="1"/>
-        </svg>
-        Define Floors
-      </button>
-      <p style="font-size:11px; color:var(--text-dim); line-height:1.4; margin-top:6px" id="floorHint" class="hidden">
+    <div class="sidebar-section hidden" id="floorSection">
+      <h3>Defining Floors</h3>
+      <p style="font-size:11px; color:var(--text-dim); line-height:1.4; margin-bottom:8px" id="floorHint">
         Click around each floor area. Click "Close Floor" to finish one, then trace the next. Click "Done" when finished.
       </p>
       <button class="btn primary hidden" style="width:100%; margin-top:6px" id="floorCloseBtn">
@@ -553,31 +683,6 @@
       <button class="btn danger hidden" style="width:100%; margin-top:6px" id="floorClearBtn">
         Clear Floors
       </button>
-    </div>
-
-    <!-- Display Settings -->
-    <div class="sidebar-section">
-      <h3>Display</h3>
-      <div class="control-row">
-        <label>Opacity</label>
-        <input type="range" min="0" max="100" value="65" id="opacitySlider"
-               oninput="updateHeatmap()">
-      </div>
-
-      <div class="control-row">
-        <label>Points</label>
-        <input type="checkbox" id="showPoints" checked onchange="updateHeatmap()">
-      </div>
-      <div>
-        <div class="legend-bar"></div>
-        <div class="legend-labels">
-          <span>None</span>
-          <span>-80</span>
-          <span>-60</span>
-          <span>-40</span>
-          <span>-30</span>
-        </div>
-      </div>
     </div>
 
     <!-- Measurement Points -->
@@ -635,6 +740,21 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 </script>
 <script>
+// ── Dropdowns ──
+function toggleDropdown(id) {
+  const el = document.getElementById(id);
+  const wasOpen = el.classList.contains('open');
+  // Close all dropdowns first
+  document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+  if (!wasOpen) el.classList.add('open');
+}
+// Close dropdowns when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.dropdown')) {
+    document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+  }
+});
+
 // ── State ──
 let floorplanImg = null;
 let points = [];
@@ -1145,13 +1265,13 @@ function toggleWallMode() {
     const btn = document.getElementById('wallBtn');
     btn.classList.add('primary');
     btn.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
         <rect x="1" y="1" width="6" height="4" rx="0.5"/><rect x="9" y="1" width="6" height="4" rx="0.5"/>
         <rect x="5" y="5" width="6" height="4" rx="0.5"/><rect x="1" y="9" width="6" height="4" rx="0.5"/>
         <rect x="9" y="9" width="6" height="4" rx="0.5"/><rect x="5" y="13" width="6" height="2" rx="0.5"/>
       </svg>
-      Done Tracing`;
-    document.getElementById('wallHint').classList.remove('hidden');
+      Done`;
+    document.getElementById('wallSection').classList.remove('hidden');
     document.getElementById('wallClearBtn').classList.remove('hidden');
     canvasArea.style.cursor = 'crosshair';
     updateWallList();
@@ -1164,25 +1284,20 @@ function exitWallMode() {
   wallMode = false;
   const btn = document.getElementById('wallBtn');
   btn.classList.remove('primary');
-  document.getElementById('wallHint').classList.add('hidden');
+  document.getElementById('wallSection').classList.add('hidden');
   canvasArea.style.cursor = '';
 
   const wallIcon = `
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
       <rect x="1" y="1" width="6" height="4" rx="0.5"/><rect x="9" y="1" width="6" height="4" rx="0.5"/>
       <rect x="5" y="5" width="6" height="4" rx="0.5"/><rect x="1" y="9" width="6" height="4" rx="0.5"/>
       <rect x="9" y="9" width="6" height="4" rx="0.5"/><rect x="5" y="13" width="6" height="2" rx="0.5"/>
     </svg>`;
 
   if (wallClosed && wallVertices.length >= 3) {
-    btn.innerHTML = wallIcon + 'Walls Set ✓';
-    document.getElementById('wallClearBtn').classList.remove('hidden');
-  } else if (wallVertices.length > 0) {
-    btn.innerHTML = wallIcon + 'Trace Building Walls';
-    document.getElementById('wallClearBtn').classList.remove('hidden');
+    btn.innerHTML = wallIcon + 'Walls ✓';
   } else {
-    btn.innerHTML = wallIcon + 'Trace Building Walls';
-    document.getElementById('wallClearBtn').classList.add('hidden');
+    btn.innerHTML = wallIcon + 'Walls';
   }
   updateWallList();
   drawPoints();
@@ -1276,11 +1391,11 @@ function toggleFloorMode() {
     const btn = document.getElementById('floorBtn');
     btn.classList.add('primary');
     btn.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
         <rect x="1" y="1" width="14" height="6" rx="1"/><rect x="1" y="9" width="14" height="6" rx="1"/>
       </svg>
       Done`;
-    document.getElementById('floorHint').classList.remove('hidden');
+    document.getElementById('floorSection').classList.remove('hidden');
     document.getElementById('floorClearBtn').classList.remove('hidden');
     canvasArea.style.cursor = 'crosshair';
     drawFloorOverlay();
@@ -1310,20 +1425,18 @@ function exitFloorMode() {
   floorCurrentVerts = [];
   const btn = document.getElementById('floorBtn');
   btn.classList.remove('primary');
-  document.getElementById('floorHint').classList.add('hidden');
+  document.getElementById('floorSection').classList.add('hidden');
   document.getElementById('floorCloseBtn').classList.add('hidden');
   canvasArea.style.cursor = '';
 
-  const floorIcon = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+  const floorIcon = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
     <rect x="1" y="1" width="14" height="6" rx="1"/><rect x="1" y="9" width="14" height="6" rx="1"/>
   </svg>`;
 
   if (floorRegions.length > 0) {
-    btn.innerHTML = floorIcon + 'Floors Set ✓';
-    document.getElementById('floorClearBtn').classList.remove('hidden');
+    btn.innerHTML = floorIcon + 'Floors ✓';
   } else {
-    btn.innerHTML = floorIcon + 'Define Floors';
-    document.getElementById('floorClearBtn').classList.add('hidden');
+    btn.innerHTML = floorIcon + 'Floors';
   }
   updateFloorList();
   drawPoints();
