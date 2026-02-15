@@ -87,9 +87,8 @@
     width: 7px; height: 7px;
     border-radius: 50%;
     background: var(--green);
-    animation: pulse 2s infinite;
   }
-  .status-dot.offline { background: var(--red); animation: none; }
+  .status-dot.offline { background: var(--red); }
   .status-dot.scanning { background: var(--yellow); animation: pulse 0.5s infinite; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
@@ -156,6 +155,53 @@
     line-height: 1.5;
     margin: 0;
   }
+  .hint-wrap {
+    position: relative;
+  }
+  .dm-hint {
+    display: none;
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.4;
+    width: 220px;
+    z-index: 300;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    pointer-events: none;
+    margin: 0;
+  }
+  .dm-hint::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: -5px;
+    transform: translateY(-50%) rotate(45deg);
+    width: 8px;
+    height: 8px;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .dm-hint.flip {
+    left: auto;
+    right: calc(100% + 10px);
+  }
+  .dm-hint.flip::before {
+    left: auto;
+    right: -5px;
+    border-left: none;
+    border-bottom: none;
+    border-right: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+  }
+  .hint-wrap:hover > .dm-hint { display: block; }
   /* ── Network Selector ── */
   .network-list { max-height: 260px; overflow-y: auto; }
   .network-item {
@@ -958,10 +1004,13 @@
     <div class="dropdown" id="fileDropdown">
       <button class="btn" onclick="toggleDropdown('fileDropdown')">File ▾</button>
       <div class="dropdown-menu left-align" style="min-width: 180px;">
-        <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="exportData(); toggleDropdown('fileDropdown')">↓ Export JSON</button>
-        <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="importData(); toggleDropdown('fileDropdown')">↑ Import JSON</button>
+        <div class="hint-wrap"><button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="exportData(); toggleDropdown('fileDropdown')">↓ Export JSON</button><p class="dm-hint">Save all floor plans, points, walls, and settings to a file.</p></div>
+        <div class="hint-wrap"><button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="importData(); toggleDropdown('fileDropdown')">↑ Import JSON</button><p class="dm-hint">Load a previously exported heatmap file.</p></div>
         <div class="dm-divider"></div>
-        <button class="btn" style="width:100%; font-size:12px" onclick="exportPNG(); toggleDropdown('fileDropdown')">⎙ Export PNG</button>
+        <div class="hint-wrap"><button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="exportPNG(); toggleDropdown('fileDropdown')">⎙ Export PNG</button><p class="dm-hint">Export the current heatmap view as an image with legend and annotations.</p></div>
+        <div class="dm-divider"></div>
+        <div class="hint-wrap"><button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="restartServer(); toggleDropdown('fileDropdown')">↻ Restart Server</button><p class="dm-hint">Save progress and restart the backend server. The page will reload automatically.</p></div>
+        <div class="hint-wrap"><button class="btn" style="width:100%; font-size:12px; color:var(--red, #ef4444)" onclick="stopServer(); toggleDropdown('fileDropdown')">⏻ Stop Server</button><p class="dm-hint">Save progress and shut down the backend server.</p></div>
       </div>
     </div>
     <!-- Hidden buttons for JS references (wall/floor/AP functionality now in Tools dropdown) -->
@@ -975,111 +1024,131 @@
         <div class="fp-list" id="fpList">
           <div class="fp-empty">No floor plans yet</div>
         </div>
-        <button class="btn" style="width:100%; font-size:12px" onclick="document.getElementById('floorplanInput').click(); toggleDropdown('fpDropdown')">
-          + Upload Floor Plan
-        </button>
+        <div class="hint-wrap"><button class="btn" style="width:100%; font-size:12px" onclick="document.getElementById('floorplanInput').click(); toggleDropdown('fpDropdown')">+ Upload Floor Plan</button><p class="dm-hint">Upload a PNG, JPG, or PDF. Multi-page PDFs create one floor plan per page.</p></div>
       </div>
     </div>
     <div class="dropdown" id="analyzeDropdown">
       <button class="btn" onclick="toggleDropdown('analyzeDropdown')">Analyze ▾</button>
       <div class="dropdown-menu" style="min-width: 260px;">
-        <div class="dm-label">Heatmap Type</div>
-        <div class="dm-row">
-          <select id="heatmapType" onchange="switchThresholdPanel(); updateHeatmap()" style="flex:1; padding:4px 8px; border-radius:5px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif">
-            <option value="signal">Signal Strength (dBm)</option>
-            <option value="snr">Signal-to-Noise (SNR)</option>
-            <option value="connectivity">Connectivity</option>
-          </select>
+        <div class="hint-wrap">
+          <div class="dm-label">Heatmap Type</div>
+          <div class="dm-row">
+            <select id="heatmapType" onchange="switchThresholdPanel(); applyThresholds()" style="flex:1; padding:4px 8px; border-radius:5px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif">
+              <option value="signal">Signal Strength (dBm)</option>
+              <option value="snr">Signal-to-Noise (SNR)</option>
+              <option value="connectivity">Connectivity</option>
+            </select>
+          </div>
+          <p class="dm-hint">Signal Strength: raw dBm values. SNR: signal quality relative to noise floor. Connectivity: internet access and download speed.</p>
         </div>
         <div class="dm-divider"></div>
-        <div class="dm-label">Filter by Network</div>
-        <div class="dm-row">
-          <select id="heatmapSSID" onchange="updateHeatmap()" style="flex:1; padding:4px 8px; border-radius:5px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif">
-            <option value="">All Networks</option>
-          </select>
+        <div class="hint-wrap">
+          <div class="dm-label">Filter by Network</div>
+          <div class="dm-row">
+            <select id="heatmapSSID" onchange="applyThresholds()" style="flex:1; padding:4px 8px; border-radius:5px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif">
+              <option value="">All Networks</option>
+            </select>
+          </div>
+          <p class="dm-hint">Show heatmap for a specific SSID instead of all networks.</p>
         </div>
         <div class="dm-divider"></div>
-        <div class="dm-label">Filter by Band</div>
-        <div class="dm-row">
-          <select id="heatmapBand" onchange="updateHeatmap()" style="flex:1; padding:4px 8px; border-radius:5px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif">
-            <option value="">All Bands</option>
-            <option value="2.4 GHz">2.4 GHz only</option>
-            <option value="5 GHz">5 GHz only</option>
-            <option value="6 GHz">6 GHz only</option>
-          </select>
+        <div class="hint-wrap">
+          <div class="dm-label">Filter by Band</div>
+          <div class="dm-row">
+            <select id="heatmapBand" onchange="applyThresholds()" style="flex:1; padding:4px 8px; border-radius:5px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif">
+              <option value="">All Bands</option>
+              <option value="2.4 GHz">2.4 GHz only</option>
+              <option value="5 GHz">5 GHz only</option>
+              <option value="6 GHz">6 GHz only</option>
+            </select>
+          </div>
+          <p class="dm-hint">Filter measurement points by WiFi frequency band.</p>
         </div>
         <div class="dm-divider"></div>
         <!-- Signal Strength thresholds -->
         <div id="threshSignal">
-          <div class="dm-label">Color Thresholds (dBm)</div>
+          <div class="hint-wrap"><div class="dm-label">Color Thresholds (dBm)</div><p class="dm-hint">Adjust where heatmap colors transition. Closer to 0 = stronger signal.</p></div>
           <div class="dm-row">
             <label style="min-width:70px">Excellent</label>
-            <input type="range" min="-80" max="-20" value="-40" id="threshExcellent" oninput="updateThreshLabels(); updateHeatmap()">
+            <input type="range" min="-80" max="-20" value="-40" id="threshExcellent" oninput="updateThreshLabels()">
             <span id="threshExcellentVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">-40</span>
           </div>
           <div class="dm-row">
             <label style="min-width:70px">Good</label>
-            <input type="range" min="-90" max="-30" value="-55" id="threshGood" oninput="updateThreshLabels(); updateHeatmap()">
+            <input type="range" min="-90" max="-30" value="-55" id="threshGood" oninput="updateThreshLabels()">
             <span id="threshGoodVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">-55</span>
           </div>
           <div class="dm-row">
             <label style="min-width:70px">Fair</label>
-            <input type="range" min="-95" max="-40" value="-70" id="threshFair" oninput="updateThreshLabels(); updateHeatmap()">
+            <input type="range" min="-95" max="-40" value="-70" id="threshFair" oninput="updateThreshLabels()">
             <span id="threshFairVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">-70</span>
           </div>
           <div class="dm-row">
             <label style="min-width:70px">Weak</label>
-            <input type="range" min="-100" max="-50" value="-85" id="threshWeak" oninput="updateThreshLabels(); updateHeatmap()">
+            <input type="range" min="-100" max="-50" value="-85" id="threshWeak" oninput="updateThreshLabels()">
             <span id="threshWeakVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">-85</span>
           </div>
+          <button class="btn" style="width:100%; font-size:12px; margin-top:6px" onclick="applyThresholds()">Apply Thresholds</button>
         </div>
         <!-- SNR thresholds -->
         <div id="threshSNR" style="display:none">
-          <div class="dm-label">Color Thresholds (dB SNR)</div>
+          <div class="hint-wrap"><div class="dm-label">Color Thresholds (dB SNR)</div><p class="dm-hint">SNR = signal minus noise floor. Higher dB = cleaner signal.</p></div>
           <div class="dm-row">
             <label style="min-width:70px">Excellent</label>
-            <input type="range" min="20" max="50" value="40" id="snrThreshExcellent" oninput="updateThreshLabels(); updateHeatmap()">
+            <input type="range" min="20" max="50" value="40" id="snrThreshExcellent" oninput="updateThreshLabels()">
             <span id="snrThreshExcellentVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">40</span>
           </div>
           <div class="dm-row">
             <label style="min-width:70px">Good</label>
-            <input type="range" min="15" max="40" value="30" id="snrThreshGood" oninput="updateThreshLabels(); updateHeatmap()">
+            <input type="range" min="15" max="40" value="30" id="snrThreshGood" oninput="updateThreshLabels()">
             <span id="snrThreshGoodVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">30</span>
           </div>
           <div class="dm-row">
             <label style="min-width:70px">Fair</label>
-            <input type="range" min="10" max="30" value="20" id="snrThreshFair" oninput="updateThreshLabels(); updateHeatmap()">
+            <input type="range" min="10" max="30" value="20" id="snrThreshFair" oninput="updateThreshLabels()">
             <span id="snrThreshFairVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">20</span>
           </div>
           <div class="dm-row">
             <label style="min-width:70px">Weak</label>
-            <input type="range" min="0" max="20" value="10" id="snrThreshWeak" oninput="updateThreshLabels(); updateHeatmap()">
+            <input type="range" min="0" max="20" value="10" id="snrThreshWeak" oninput="updateThreshLabels()">
             <span id="snrThreshWeakVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">10</span>
           </div>
+          <button class="btn" style="width:100%; font-size:12px; margin-top:6px" onclick="applyThresholds()">Apply Thresholds</button>
         </div>
         <!-- Connectivity thresholds -->
         <div id="threshConn" style="display:none">
-          <div class="dm-label">Color Thresholds (Mbps)</div>
+          <div class="hint-wrap"><div class="dm-label">Color Thresholds (Mbps)</div><p class="dm-hint">Set download speed breakpoints for color transitions.</p></div>
           <div class="dm-row">
             <label style="min-width:70px">Excellent</label>
-            <input type="range" min="10" max="500" value="100" id="connThreshExcellent" oninput="updateThreshLabels(); updateHeatmap()">
+            <input type="range" min="10" max="500" value="100" id="connThreshExcellent" oninput="updateThreshLabels()">
             <span id="connThreshExcellentVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">100</span>
           </div>
           <div class="dm-row">
             <label style="min-width:70px">Good</label>
-            <input type="range" min="5" max="200" value="50" id="connThreshGood" oninput="updateThreshLabels(); updateHeatmap()">
+            <input type="range" min="5" max="200" value="50" id="connThreshGood" oninput="updateThreshLabels()">
             <span id="connThreshGoodVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">50</span>
           </div>
           <div class="dm-row">
             <label style="min-width:70px">Fair</label>
-            <input type="range" min="1" max="100" value="10" id="connThreshFair" oninput="updateThreshLabels(); updateHeatmap()">
+            <input type="range" min="1" max="100" value="10" id="connThreshFair" oninput="updateThreshLabels()">
             <span id="connThreshFairVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">10</span>
           </div>
           <div class="dm-row">
             <label style="min-width:70px">Weak</label>
-            <input type="range" min="0" max="50" value="1" id="connThreshWeak" oninput="updateThreshLabels(); updateHeatmap()">
+            <input type="range" min="0" max="50" value="1" id="connThreshWeak" oninput="updateThreshLabels()">
             <span id="connThreshWeakVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">1</span>
           </div>
+          <button class="btn" style="width:100%; font-size:12px; margin-top:6px" onclick="applyThresholds()">Apply Thresholds</button>
+          <p id="connSpeedNote" style="font-size:10px; color:var(--warning, #f59e0b); margin:2px 0 0">Enable "Speed Test" below to get speed data for this mode.</p>
+        </div>
+        <div class="dm-divider"></div>
+        <div class="hint-wrap">
+          <div class="dm-label">Speed Test</div>
+          <div class="dm-row">
+            <label style="min-width:70px">Auto test</label>
+            <input type="checkbox" id="speedTestEnabled" onchange="toast(this.checked ? 'Speed test enabled — each scan will also measure download speed' : 'Speed test disabled'); const cn=document.getElementById('connSpeedNote'); if(cn) cn.style.display=this.checked?'none':''">
+          </div>
+          <p class="dm-hint">Downloads a small file to measure throughput at each point. Adds a few seconds per scan. Required for the Connectivity heatmap mode.</p>
         </div>
       </div>
     </div>
@@ -1087,26 +1156,15 @@
       <button class="btn" onclick="toggleDropdown('toolsDropdown')">Tools ▾</button>
       <div class="dropdown-menu" style="min-width: 240px;">
         <div class="dm-label">Drawing</div>
-        <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" id="toolsWallBtn" onclick="toggleWallMode(); toggleDropdown('toolsDropdown')">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" stroke="none"><rect x="0" y="0" width="5" height="3"/><rect x="6" y="0" width="5" height="3"/><rect x="12" y="0" width="4" height="3"/><rect x="0" y="4" width="1" height="3"/><rect x="2" y="4" width="5" height="3"/><rect x="8" y="4" width="5" height="3"/><rect x="14" y="4" width="2" height="3"/><rect x="0" y="8" width="5" height="3"/><rect x="6" y="8" width="5" height="3"/><rect x="12" y="8" width="4" height="3"/><rect x="0" y="12" width="1" height="4"/><rect x="2" y="12" width="5" height="4"/><rect x="8" y="12" width="5" height="4"/><rect x="14" y="12" width="2" height="4"/></svg>
-          Draw Walls
-        </button>
-        <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" id="toolsFloorBtn" onclick="toggleFloorMode(); toggleDropdown('toolsDropdown')">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="6" rx="1"/><rect x="1" y="9" width="14" height="6" rx="1"/></svg>
-          Draw Perimeter
-        </button>
-        <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" id="toolsApBtn" onclick="toggleApMode(); toggleDropdown('toolsDropdown')">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="10" r="2.5"/><path d="M4.5 7.5a5 5 0 0 1 7 0"/><path d="M2.5 5.5a8 8 0 0 1 11 0"/></svg>
-          Place Access Points
-        </button>
+        <div class="hint-wrap"><button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" id="toolsWallBtn" onclick="toggleWallMode(); toggleDropdown('toolsDropdown')"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" stroke="none"><rect x="0" y="0" width="5" height="3"/><rect x="6" y="0" width="5" height="3"/><rect x="12" y="0" width="4" height="3"/><rect x="0" y="4" width="1" height="3"/><rect x="2" y="4" width="5" height="3"/><rect x="8" y="4" width="5" height="3"/><rect x="14" y="4" width="2" height="3"/><rect x="0" y="8" width="5" height="3"/><rect x="6" y="8" width="5" height="3"/><rect x="12" y="8" width="4" height="3"/><rect x="0" y="12" width="1" height="4"/><rect x="2" y="12" width="5" height="4"/><rect x="8" y="12" width="5" height="4"/><rect x="14" y="12" width="2" height="4"/></svg> Draw Walls</button><p class="dm-hint">Draw interior walls to model signal attenuation between rooms. Click to place, Esc to stop chaining.</p></div>
+        <div class="hint-wrap"><button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" id="toolsFloorBtn" onclick="toggleFloorMode(); toggleDropdown('toolsDropdown')"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="6" rx="1"/><rect x="1" y="9" width="14" height="6" rx="1"/></svg> Draw Perimeter</button><p class="dm-hint">Trace the building outline to clip the heatmap to interior spaces. Supports multiple separate areas.</p></div>
+        <div class="hint-wrap"><button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" id="toolsApBtn" onclick="toggleApMode(); toggleDropdown('toolsDropdown')"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="10" r="2.5"/><path d="M4.5 7.5a5 5 0 0 1 7 0"/><path d="M2.5 5.5a8 8 0 0 1 11 0"/></svg> Place Access Points</button><p class="dm-hint">Mark the physical locations of your routers/APs on the floor plan.</p></div>
         <div id="toolsApList" style="max-height:120px; overflow-y:auto; font-size:11px"></div>
         <div class="dm-divider"></div>
         <div class="dm-label">Scale Calibration</div>
         <div id="scaleStatus">
           <p id="scaleInfo" style="margin-bottom:6px">Not calibrated</p>
-          <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="startScaleCalibration()" id="scaleCalibrateBtn">
-            Calibrate Scale
-          </button>
+          <div class="hint-wrap"><button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="startScaleCalibration()" id="scaleCalibrateBtn">Calibrate Scale</button><p class="dm-hint">Click two points of known distance to set real-world scale for measurements and the scale bar.</p></div>
           <div id="scaleInputRow" style="display:none">
             <div class="dm-row" style="gap:4px">
               <input type="number" id="scaleDistInput" placeholder="Distance..."
@@ -1125,37 +1183,45 @@
         </div>
         <div class="dm-divider"></div>
         <div class="dm-label">Annotations</div>
-        <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="toggleAnnotationMode()" id="annotateBtn">
-          + Add Note
-        </button>
+        <div class="hint-wrap"><button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="toggleAnnotationMode()" id="annotateBtn">+ Add Note</button><p class="dm-hint">Place text labels anywhere on the floor plan. Click to position, then type your note.</p></div>
         <div id="annotationList" style="max-height:120px; overflow-y:auto; font-size:11px"></div>
         <div class="dm-divider"></div>
-        <div class="dm-label">Speed Test</div>
-        <div class="dm-row">
-          <label style="min-width:70px">Auto test</label>
-          <input type="checkbox" id="speedTestEnabled" onchange="toast(this.checked ? 'Speed test enabled — each scan will also measure download speed' : 'Speed test disabled')">
-        </div>
-        <p>When enabled, each measurement point will also run a download speed test.</p>
-        <div class="dm-divider"></div>
         <div class="dm-label">Wall Materials</div>
-        <button class="btn" style="width:100%; font-size:12px" onclick="showWallMaterialDialog()" id="wallMaterialBtn">
-          Configure Presets
-        </button>
+        <div class="hint-wrap"><button class="btn" style="width:100%; font-size:12px" onclick="showWallMaterialDialog()" id="wallMaterialBtn">Configure Presets</button><p class="dm-hint">Assign material types (drywall, concrete, glass, etc.) with predefined signal attenuation values.</p></div>
       </div>
     </div>
     <div class="dropdown" id="displayDropdown">
       <button class="btn" onclick="toggleDropdown('displayDropdown')">Display ▾</button>
       <div class="dropdown-menu">
         <div class="dm-label">Display Settings</div>
-        <div class="dm-row">
-          <label>Opacity</label>
-          <input type="range" min="0" max="100" value="65" id="opacitySlider"
-                 oninput="updateHeatmap()">
+        <div class="hint-wrap">
+          <div class="dm-row">
+            <label>Opacity</label>
+            <input type="range" min="0" max="100" value="65" id="opacitySlider">
+          </div>
+          <p class="dm-hint">Transparency of the heatmap overlay on the floor plan.</p>
         </div>
-        <div class="dm-row">
-          <label>Points</label>
-          <input type="checkbox" id="showPoints" checked onchange="updateHeatmap()">
+        <div class="hint-wrap">
+          <div class="dm-row">
+            <label>Points</label>
+            <input type="checkbox" id="showPoints" checked>
+          </div>
+          <p class="dm-hint">Show or hide measurement point markers on the map.</p>
         </div>
+        <button class="btn" style="width:100%; font-size:12px; margin-top:4px; margin-bottom:4px" onclick="applyDisplay()">Apply Display</button>
+        <div class="dm-divider"></div>
+        <div class="hint-wrap">
+          <div class="dm-row">
+            <label>Live Heatmap</label>
+            <input type="checkbox" id="liveHeatmap" checked onchange="toggleLiveHeatmap()">
+          </div>
+          <p class="dm-hint">When enabled, the heatmap re-renders automatically after placing points, walls, etc.</p>
+        </div>
+        <div id="liveHeatmapOff" style="display:none">
+          <p style="font-size:10px; color:var(--warning, #f59e0b); margin:2px 0 4px">Heatmap won't update automatically. Click below to refresh manually.</p>
+          <button class="btn" style="width:100%; font-size:12px" onclick="manualRefreshHeatmap()">↻ Refresh Heatmap</button>
+        </div>
+        <div class="dm-divider"></div>
         <div class="dm-row">
           <label>Theme</label>
           <button class="btn" style="font-size:12px; padding:4px 10px" onclick="toggleTheme()" id="themeBtn">
@@ -1173,15 +1239,11 @@
         </div>
         <div class="dm-divider"></div>
         <div class="dm-label">Floor Plan</div>
-        <button class="btn" style="width:100%; font-size:12px" onclick="stripFloorplanBg()" id="stripBgBtn" disabled>
-          Strip Background
-        </button>
+        <div class="hint-wrap"><button class="btn" style="width:100%; font-size:12px" onclick="stripFloorplanBg()" id="stripBgBtn" disabled>Strip Background</button><p class="dm-hint">Remove white or black backgrounds from the floor plan image for a cleaner overlay.</p></div>
         <div class="dm-divider"></div>
         <div class="dm-label">Satellite Map</div>
         <div id="mapBtnRow">
-          <button class="btn" style="width:100%; font-size:12px" onclick="showMapAddressField()" id="mapLoadBtn">
-            Load Satellite Map
-          </button>
+          <div class="hint-wrap"><button class="btn" style="width:100%; font-size:12px" onclick="showMapAddressField()" id="mapLoadBtn">Load Satellite Map</button><p class="dm-hint">Load satellite imagery by address and overlay it behind your floor plan. No API key needed.</p></div>
         </div>
         <div id="mapAddressRow" style="display:none">
           <div class="dm-row" style="gap:4px">
@@ -1201,13 +1263,14 @@
             <label>Visible</label>
             <input type="checkbox" id="mapVisible" checked onchange="renderMapCanvas()">
           </div>
-          <div class="dm-row">
-            <label>Outside only</label>
-            <input type="checkbox" id="mapOutsideOnly" onchange="renderMapCanvas()">
+          <div class="hint-wrap">
+            <div class="dm-row">
+              <label>Outside only</label>
+              <input type="checkbox" id="mapOutsideOnly" onchange="renderMapCanvas()">
+            </div>
+            <p class="dm-hint">Hide the satellite map inside the building perimeter so it only shows outdoors.</p>
           </div>
-          <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="startMapAlign()" id="mapAlignBtn">
-            Align to Floor Plan
-          </button>
+          <div class="hint-wrap"><button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="startMapAlign()" id="mapAlignBtn">Align to Floor Plan</button><p class="dm-hint">Click matching points on the map and floor plan. 1 pair = position, 2 = position + rotation + scale, 3+ = full correction.</p></div>
           <div id="mapAlignStatus" style="display:none; font-size:11px; color:var(--text-secondary); padding:4px 0; line-height:1.4"></div>
           <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px; display:none" onclick="finishMapAlign()" id="mapAlignDoneBtn">
             Done Aligning
@@ -1341,7 +1404,7 @@
 
     <!-- Activity Console -->
     <div class="console-section">
-      <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Console</h3>
+      <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')" title="Click any entry to undo that action">Console</h3>
       <div class="section-body">
         <div class="console-log" id="consoleLog"></div>
       </div>
@@ -1620,31 +1683,61 @@ const fpCtx = fpCanvas.getContext('2d');
 const hmCtx = hmCanvas.getContext('2d');
 const ptCtx = ptCanvas.getContext('2d');
 
-// ── Init ──
-init();
+// ── Hint tooltip flip ──
+document.addEventListener('mouseenter', (e) => {
+  const wrap = e.target.closest('.hint-wrap');
+  if (!wrap) return;
+  const hint = wrap.querySelector('.dm-hint');
+  if (!hint) return;
+  hint.classList.remove('flip');
+  const rect = wrap.getBoundingClientRect();
+  if (rect.right + 240 > window.innerWidth) {
+    hint.classList.add('flip');
+  }
+}, true);
 
+// ── Init ──
+let _initDone = false;
 async function init() {
+  const initStart = performance.now();
+  setStatus('scanning', 'Initializing...');
   setupEventListeners();
   // Try initial scan
   try {
+    const t0 = performance.now();
     const resp = await fetch('/api/scan');
     const info = await resp.json();
     updateSignalDisplay(info);
-  } catch {
-    setStatus('offline', 'Server unreachable');
-  }
+    logAction('WiFi scan (' + ((performance.now() - t0) / 1000).toFixed(1) + 's)');
+  } catch {}
   // Try loading saved data
   try {
+    const t0 = performance.now();
     const resp = await fetch('/api/data');
     const data = await resp.json();
-    loadSavedData(data);
-    logAction('Session loaded');
+    logAction('Data fetched (' + ((performance.now() - t0) / 1000).toFixed(1) + 's)');
+    setStatus('scanning', 'Loading floor plan...');
+    await loadSavedData(data);
+    logAction('Session loaded (' + ((performance.now() - initStart) / 1000).toFixed(1) + 's total)');
   } catch {
     logAction('New session started');
   }
+  _initDone = true;
+  // Defer heatmap render to web worker so page stays responsive
+  if (points.length > 0) {
+    setStatus('scanning', 'Rendering heatmap...');
+    const t0 = performance.now();
+    await updateHeatmapAsync();
+    const renderTime = ((performance.now() - t0) / 1000).toFixed(1);
+    saveData();
+    logAction('Heatmap rendered (' + renderTime + 's)');
+    toast('Heatmap rendered (' + renderTime + 's)');
+  } else {
+    updateStatusText();
+  }
 }
 
-function loadSavedData(data) {
+async function loadSavedData(data) {
   if (data.version === 2 && data.floorplans) {
     // New multi-floorplan format
     floorplans = data.floorplans || [];
@@ -1685,20 +1778,24 @@ function loadSavedData(data) {
 
       // Load satellite map state
       if (fp.mapState && fp.mapState.tilesDataURL) {
+        setStatus('scanning', 'Loading satellite map...');
         mapState = JSON.parse(JSON.stringify(fp.mapState));
-        const mapImg = new Image();
-        mapImg.onload = () => {
-          mapTilesImage = document.createElement('canvas');
-          mapTilesImage.width = mapImg.width;
-          mapTilesImage.height = mapImg.height;
-          mapTilesImage.getContext('2d').drawImage(mapImg, 0, 0);
-          syncMapControlsFromState();
-          document.getElementById('mapBtnRow').style.display = 'none';
-          document.getElementById('mapAddressRow').style.display = 'none';
-          document.getElementById('mapControls').style.display = '';
-          renderMapCanvas();
-        };
-        mapImg.src = mapState.tilesDataURL;
+        await new Promise(resolve => {
+          const mapImg = new Image();
+          mapImg.onload = () => {
+            mapTilesImage = document.createElement('canvas');
+            mapTilesImage.width = mapImg.width;
+            mapTilesImage.height = mapImg.height;
+            mapTilesImage.getContext('2d').drawImage(mapImg, 0, 0);
+            syncMapControlsFromState();
+            document.getElementById('mapBtnRow').style.display = 'none';
+            document.getElementById('mapAddressRow').style.display = 'none';
+            document.getElementById('mapControls').style.display = '';
+            renderMapCanvas();
+            resolve();
+          };
+          mapImg.src = mapState.tilesDataURL;
+        });
       }
 
       if (walls.length > 0) { updateWallList(); exitWallMode(); }
@@ -1708,7 +1805,8 @@ function loadSavedData(data) {
       updateFpList();
 
       if (fp.image) {
-        loadFloorplanFromDataURL(fp.image);
+        setStatus('scanning', 'Loading floor plan...');
+        await loadFloorplanFromDataURL(fp.image);
       }
       // Update strip button
       const stripBtn = document.getElementById('stripBgBtn');
@@ -1751,7 +1849,8 @@ function loadSavedData(data) {
       }];
       activeFloorplanId = id;
       updateFpList();
-      loadFloorplanFromDataURL(data.floorplan);
+      setStatus('scanning', 'Loading floor plan...');
+      await loadFloorplanFromDataURL(data.floorplan);
     }
   }
 }
@@ -2109,38 +2208,40 @@ function stripFloorplanBg() {
 }
 
 function loadFloorplanFromDataURL(dataURL, skipStripReset) {
-  const img = new Image();
-  img.onload = () => {
-    floorplanImg = img;
-    canvasW = img.width;
-    canvasH = img.height;
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = async () => {
+      floorplanImg = img;
+      canvasW = img.width;
+      canvasH = img.height;
 
-    fpCanvas.width = hmCanvas.width = canvasW;
-    fpCanvas.height = hmCanvas.height = canvasH;
-    mapCanvas.width = canvasW;
-    mapCanvas.height = canvasH;
-    ptCanvas.width = canvasW + OVERLAY_PAD * 2;
-    ptCanvas.height = canvasH + OVERLAY_PAD * 2;
-    ptCanvas.style.left = -OVERLAY_PAD + 'px';
-    ptCanvas.style.top = -OVERLAY_PAD + 'px';
-    container.style.width = canvasW + 'px';
-    container.style.height = canvasH + 'px';
+      fpCanvas.width = hmCanvas.width = canvasW;
+      fpCanvas.height = hmCanvas.height = canvasH;
+      mapCanvas.width = canvasW;
+      mapCanvas.height = canvasH;
+      ptCanvas.width = canvasW + OVERLAY_PAD * 2;
+      ptCanvas.height = canvasH + OVERLAY_PAD * 2;
+      ptCanvas.style.left = -OVERLAY_PAD + 'px';
+      ptCanvas.style.top = -OVERLAY_PAD + 'px';
+      container.style.width = canvasW + 'px';
+      container.style.height = canvasH + 'px';
 
-    fpCtx.drawImage(img, 0, 0);
-    document.getElementById('uploadOverlay').classList.add('hidden');
+      fpCtx.drawImage(img, 0, 0);
+      document.getElementById('uploadOverlay').classList.add('hidden');
 
-    if (!skipStripReset) {
-      document.getElementById('stripBgBtn').disabled = false;
-      document.getElementById('stripBgBtn').textContent = floorplanStripped ? 'Restore Original' : 'Strip Background';
-    }
+      if (!skipStripReset) {
+        document.getElementById('stripBgBtn').disabled = false;
+        document.getElementById('stripBgBtn').textContent = floorplanStripped ? 'Restore Original' : 'Strip Background';
+      }
 
-    zoomFit();
-    updateHeatmap();
-    renderMapCanvas();
-    saveData();
-    logAction('Floor plan loaded (' + img.width + '×' + img.height + ')');
-  };
-  img.src = dataURL;
+      zoomFit();
+      drawPoints();
+      renderMapCanvas();
+      logAction('Floor plan loaded (' + img.width + '×' + img.height + ')');
+      resolve();
+    };
+    img.src = dataURL;
+  });
 }
 
 // ── Multi-Floorplan Management ──
@@ -2718,9 +2819,9 @@ async function placePoint(x, y) {
   let dbm;
   let isDeadZone = false;
   let scanInfo = null;
+  setStatus('scanning', 'Scanning...');
 
   if (mode === 'auto') {
-    setStatus('scanning', 'Scanning...');
     try {
       const resp = await fetch('/api/scan');
       scanInfo = await resp.json();
@@ -2745,6 +2846,7 @@ async function placePoint(x, y) {
   // Run speed test if enabled
   let speedMbps = null;
   if (document.getElementById('speedTestEnabled')?.checked) {
+    setStatus('scanning', 'Running speed test...');
     speedMbps = await runSpeedTest();
   }
 
@@ -2769,15 +2871,25 @@ async function placePoint(x, y) {
 
   points.push(point);
   updatePointList();
-  updateHeatmap();
+  let renderTime = '0.0';
+  if (isLiveHeatmap()) {
+    setStatus('scanning', 'Rendering heatmap...');
+    const t0 = performance.now();
+    await updateHeatmapAsync();
+    renderTime = ((performance.now() - t0) / 1000).toFixed(1);
+  } else {
+    _heatmapStale = true;
+    drawPoints();
+    renderMapCanvas();
+  }
   saveData();
 
   const bandStr = point.band ? ` (${point.band})` : '';
   const speedStr = speedMbps ? ` · ${speedMbps.toFixed(1)} Mbps` : '';
   const ptNum = points.length;
   const ptMsg = isDeadZone ? 'Dead zone marked' : `Point ${ptNum} placed: ${dbm} dBm${bandStr}${speedStr}`;
-  toast(ptMsg);
-  logAction(ptMsg, () => {
+  toast(isLiveHeatmap() ? ptMsg + ' (' + renderTime + 's)' : ptMsg);
+  logAction(isLiveHeatmap() ? ptMsg + ' (render: ' + renderTime + 's)' : ptMsg, () => {
     const idx = points.indexOf(point);
     if (idx >= 0) { points.splice(idx, 1); updatePointList(); updateHeatmap(); saveData(); }
   });
@@ -2918,11 +3030,17 @@ function selectNetwork(ssid) {
   if (currentSignal) updateSignalDisplay(currentSignal);
 }
 
+function isSpecialMode() {
+  return mapAlignMode || wallMode || floorMode || apMode || scaleCalMode || annotationMode;
+}
+
 function setStatus(state, text) {
+  if (isSpecialMode()) return;
+  if (typeof _initDone !== 'undefined' && !_initDone && state !== 'scanning') return;
   const dot = document.getElementById('statusDot');
-  const statusText = document.getElementById('statusText');
+  const st = document.getElementById('statusText');
   dot.className = 'status-dot ' + (state === 'online' ? '' : state);
-  statusText.textContent = text;
+  st.textContent = text;
 }
 
 // ── Mode Toggle ──
@@ -3204,11 +3322,13 @@ function cancelMapAlign() {
   document.getElementById('mapAlignBtn').textContent = 'Align to Floor Plan';
   document.getElementById('mapAlignDoneBtn').style.display = 'none';
   document.getElementById('mapAlignStatus').style.display = 'none';
+  updateStatusText();
   drawPoints(); // clear alignment markers
 }
 
 function finishMapAlign() {
-  if (mapAlignPairs.length < 1) {
+  const pairCount = mapAlignPairs.length;
+  if (pairCount < 1) {
     toast('Need at least 1 point pair to align');
     return;
   }
@@ -3216,21 +3336,28 @@ function finishMapAlign() {
   cancelMapAlign();
   renderMapCanvas();
   saveData();
-  toast('Map aligned with ' + mapAlignPairs.length + ' point' + (mapAlignPairs.length > 1 ? 's' : '') + '!');
-  // cancelMapAlign clears pairs, but we already computed — that's fine
+  document.getElementById('statusText').textContent = 'Map aligned with ' + pairCount + ' point' + (pairCount > 1 ? 's' : '') + '!';
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { updateStatusText(); }, 3000);
 }
 
 function updateAlignStatus() {
   const el = document.getElementById('mapAlignStatus');
+  const st = document.getElementById('statusText');
   const n = mapAlignPairs.length;
+  let html, plain;
   if (mapAlignWaitingFor === 'map') {
-    el.style.display = '';
-    el.innerHTML = (n === 0 ? '①' : '⊕') + ' Click a point on the <b>satellite map</b>' +
+    plain = 'Align: click a point on the satellite map' +
+      (n > 0 ? ` (${n} pair${n > 1 ? 's' : ''} placed)` : '');
+    html = (n === 0 ? '①' : '⊕') + ' Click a point on the <b>satellite map</b>' +
       (n > 0 ? `<br><span style="color:var(--accent)">${n} pair${n > 1 ? 's' : ''} placed — click Done when ready</span>` : '');
   } else {
-    el.style.display = '';
-    el.innerHTML = '② Now click the same point on the <b>floor plan</b>';
+    plain = 'Align: click the same point on the floor plan';
+    html = '② Now click the same point on the <b>floor plan</b>';
   }
+  el.style.display = '';
+  el.innerHTML = html;
+  st.textContent = plain;
 }
 
 function canvasToMapImg(canvasX, canvasY) {
@@ -3434,12 +3561,13 @@ function toggleWallMode() {
     canvasArea.style.cursor = 'crosshair';
     updateWallList();
     drawWallOverlay();
-    toast('Click to start a wall, click again to end it');
+    document.getElementById('statusText').textContent = 'Drawing walls — click to place, Esc to stop';
   }
 }
 
 function exitWallMode() {
   wallMode = false;
+  updateStatusText();
   wallStartPoint = null;
   wallMousePos = null;
   wallSnapResult = null;
@@ -3678,12 +3806,13 @@ function toggleApMode() {
       tb.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="10" r="2.5"/><path d="M4.5 7.5a5 5 0 0 1 7 0"/><path d="M2.5 5.5a8 8 0 0 1 11 0"/></svg> Done (placing)`;
     }
     drawPoints();
-    toast('Click on the map to place an access point. Escape or click APs to finish.');
+    document.getElementById('statusText').textContent = 'Placing APs — click to place, Esc to stop';
   }
 }
 
 function exitApMode() {
   apMode = false;
+  updateStatusText();
   canvasArea.style.cursor = '';
   document.getElementById('apBtn').classList.remove('active');
   document.getElementById('apBtnLabel').textContent = 'APs ▾';
@@ -3769,7 +3898,7 @@ function toggleFloorMode() {
     document.getElementById('floorClearBtn').classList.remove('hidden');
     canvasArea.style.cursor = 'crosshair';
     drawFloorOverlay();
-    toast('Click around the building perimeter');
+    document.getElementById('statusText').textContent = 'Drawing perimeter — click to place vertices, Esc to stop';
   }
 }
 
@@ -3797,6 +3926,7 @@ function closeCurrentFloor() {
 
 function exitFloorMode() {
   floorMode = false;
+  updateStatusText();
   floorCurrentVerts = [];
   const btn = document.getElementById('floorBtn');
   btn.classList.remove('primary');
@@ -4086,11 +4216,56 @@ function highlightPoint(idx) {
 }
 
 // ── Heatmap Rendering ──
+let _heatmapRenderPending = false;
+let _heatmapStale = false;
+
+function isLiveHeatmap() {
+  return document.getElementById('liveHeatmap')?.checked !== false;
+}
+
+function toggleLiveHeatmap() {
+  const on = document.getElementById('liveHeatmap').checked;
+  document.getElementById('liveHeatmapOff').style.display = on ? 'none' : '';
+  if (on && _heatmapStale) {
+    manualRefreshHeatmap();
+  }
+}
+
+async function manualRefreshHeatmap() {
+  setStatus('scanning', 'Refreshing heatmap...');
+  const t0 = performance.now();
+  await updateHeatmapAsync();
+  const renderTime = ((performance.now() - t0) / 1000).toFixed(1);
+  _heatmapStale = false;
+  saveData();
+  logAction('Heatmap refreshed (' + renderTime + 's)');
+  toast('Heatmap refreshed (' + renderTime + 's)');
+}
+
 function updateHeatmap() {
+  // Skip render if live heatmap is off — just mark stale
+  if (!isLiveHeatmap()) {
+    _heatmapStale = true;
+    drawPoints();
+    renderMapCanvas();
+    return;
+  }
+  // Always use web worker to avoid blocking main thread
+  if (_heatmapRenderPending) return;
+  _heatmapRenderPending = true;
   recalcWallStrengths();
-  drawHeatmap();
+  drawHeatmapAsync().then(() => {
+    drawPoints();
+    renderMapCanvas();
+    _heatmapRenderPending = false;
+  });
+}
+
+async function updateHeatmapAsync() {
+  recalcWallStrengths();
+  await drawHeatmapAsync();
   drawPoints();
-  renderMapCanvas(); // keep perimeter cutout in sync
+  renderMapCanvas();
 }
 
 // ── Wall Attenuation Helpers ──
@@ -4187,148 +4362,239 @@ function valueToColor(val) {
   return dbmToColor(val);
 }
 
-function drawHeatmap() {
-  hmCtx.clearRect(0, 0, canvasW, canvasH);
-  updateLegend();
+// ── Heatmap Web Worker (inline) ──
+const _heatmapWorkerCode = `
+self.onmessage = function(e) {
+  const { id, pts, wallSegs, floors, w, h, scale, opacity, htype, thresholds, WALL_ATTEN_MAX } = e.data;
+  try {
 
-  const filteredPts = getFilteredPoints();
-  if (filteredPts.length === 0) return;
+  function pointInPolygon(px, py, verts) {
+    let inside = false;
+    for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
+      const xi = verts[i].x, yi = verts[i].y;
+      const xj = verts[j].x, yj = verts[j].y;
+      if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+    return inside;
+  }
+  function getFloor(px, py) {
+    for (let i = 0; i < floors.length; i++) {
+      if (floors[i].length >= 3 && pointInPolygon(px, py, floors[i])) return i;
+    }
+    return -1;
+  }
+  function segIntersect(ax,ay,bx,by,cx,cy,dx,dy) {
+    const det = (bx-ax)*(dy-cy)-(by-ay)*(dx-cx);
+    if (Math.abs(det)<1e-10) return false;
+    const t = ((cx-ax)*(dy-cy)-(cy-ay)*(dx-cx))/det;
+    const u = ((cx-ax)*(by-ay)-(cy-ay)*(bx-ax))/det;
+    return t>0&&t<1&&u>0&&u<1;
+  }
+  function countWalls(ax,ay,bx,by) {
+    const crossed = [];
+    for (const w of wallSegs) {
+      if (segIntersect(ax,ay,bx,by,w.x1,w.y1,w.x2,w.y2)) crossed.push(w.strength);
+    }
+    return crossed;
+  }
+  function lerpColor(a,b,t) { return [Math.round(a[0]+(b[0]-a[0])*t),Math.round(a[1]+(b[1]-a[1])*t),Math.round(a[2]+(b[2]-a[2])*t)]; }
+  function stopsColor(val, stops) {
+    if (val<=stops[0].val) return stops[0].color;
+    if (val>=stops[stops.length-1].val) return stops[stops.length-1].color;
+    for (let i=0;i<stops.length-1;i++) {
+      if (val<=stops[i+1].val) {
+        const range=stops[i+1].val-stops[i].val;
+        const t=range>0?(val-stops[i].val)/range:0;
+        return lerpColor(stops[i].color,stops[i+1].color,t);
+      }
+    }
+    return stops[stops.length-1].color;
+  }
+  const th = thresholds;
+  function valueToColor(val) {
+    if (htype==='snr') {
+      return stopsColor(val,[{val:0,color:[127,29,29]},{val:th.weak,color:[239,68,68]},{val:(th.weak+th.fair)/2,color:[249,115,22]},{val:th.fair,color:[234,179,8]},{val:th.good,color:[34,197,94]},{val:th.excellent,color:[6,182,212]}]);
+    }
+    if (htype==='connectivity') {
+      const cap=Math.max(th.excellent,100);
+      const m2v=(mbps)=>50+Math.min(mbps,cap)/cap*50;
+      const stops=[{val:0,color:[127,29,29]},{val:25,color:[100,100,100]},{val:50,color:[234,179,8]},{val:m2v(th.weak),color:[239,68,68]},{val:m2v(th.fair),color:[249,115,22]},{val:m2v(th.good),color:[34,197,94]},{val:m2v(th.excellent),color:[6,182,212]}];
+      stops.sort((a,b)=>a.val-b.val);
+      return stopsColor(val,stops);
+    }
+    return stopsColor(val,[{val:-100,color:[127,29,29]},{val:th.weak,color:[239,68,68]},{val:(th.weak+th.fair)/2,color:[249,115,22]},{val:th.fair,color:[234,179,8]},{val:th.good,color:[34,197,94]},{val:th.excellent,color:[6,182,212]}]);
+  }
 
-  const opacity = document.getElementById('opacitySlider').value / 100;
-  const useFloors = floorRegions.length >= 2;
-
-  // Pre-assign each point to a floor region (-1 = none)
-  const pointFloors = filteredPts.map(p => getFloorForPoint(p.x, p.y));
-
-  // Build per-floor point lists if floors are defined
+  const useFloors = floors.length >= 2;
+  const pointFloors = pts.map(p => getFloor(p.x, p.y));
   const floorPointSets = {};
   if (useFloors) {
-    for (let fi = 0; fi < floorRegions.length; fi++) floorPointSets[fi] = [];
-    floorPointSets[-1] = [];
-    filteredPts.forEach((p, i) => {
-      const fi = pointFloors[i];
-      (floorPointSets[fi] || floorPointSets[-1]).push(p);
-    });
+    for (let fi=0;fi<floors.length;fi++) floorPointSets[fi]=[];
+    floorPointSets[-1]=[];
+    pts.forEach((p,i) => { (floorPointSets[pointFloors[i]]||floorPointSets[-1]).push(p); });
   }
-
-  function getPointsForPixel(rx, ry) {
-    if (!useFloors) return filteredPts;
-    const fi = getFloorForPoint(rx, ry);
-    if (fi === -1) return filteredPts;
-    return floorPointSets[fi] || [];
+  function getPixelPts(rx,ry) {
+    if (!useFloors) return pts;
+    const fi=getFloor(rx,ry);
+    return fi===-1?pts:(floorPointSets[fi]||[]);
   }
-
-  function calcMaxDist(pts) {
-    if (pts.length === 0) return 100;
-    if (pts.length === 1) return Math.max(canvasW, canvasH) * 0.3;
-    let totalNN = 0;
-    for (let i = 0; i < pts.length; i++) {
-      let minDist = Infinity;
-      for (let j = 0; j < pts.length; j++) {
-        if (i === j) continue;
-        const d = Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y);
-        if (d < minDist) minDist = d;
-      }
-      totalNN += minDist;
+  function calcMaxDist(arr) {
+    if (arr.length===0) return 100;
+    if (arr.length===1) return Math.max(w*scale,h*scale)*0.3;
+    let tot=0;
+    for (let i=0;i<arr.length;i++) {
+      let mn=Infinity;
+      for (let j=0;j<arr.length;j++) { if (i!==j) { const d=Math.hypot(arr[i].x-arr[j].x,arr[i].y-arr[j].y); if(d<mn) mn=d; } }
+      tot+=mn;
     }
-    return (totalNN / pts.length) * 2;
+    return (tot/arr.length)*2;
   }
-
   const floorMaxDist = {};
-  if (useFloors) {
-    for (const fi in floorPointSets) {
-      floorMaxDist[fi] = calcMaxDist(floorPointSets[fi]);
-    }
-  }
-  const globalMaxDist = calcMaxDist(filteredPts);
-
-  const scale = 4;
-  const w = Math.ceil(canvasW / scale);
-  const h = Math.ceil(canvasH / scale);
-
-  const offscreen = document.createElement('canvas');
-  offscreen.width = w;
-  offscreen.height = h;
-  const ctx = offscreen.getContext('2d');
-  const imgData = ctx.createImageData(w, h);
-  const data = imgData.data;
-
+  if (useFloors) { for (const fi in floorPointSets) floorMaxDist[fi]=calcMaxDist(floorPointSets[fi]); }
+  const globalMaxDist = calcMaxDist(pts);
   const power = 2.5;
+  const defaultVal = htype==='snr'?0:htype==='connectivity'?0:-100;
+  const data = new Uint8ClampedArray(w*h*4);
 
-  for (let py = 0; py < h; py++) {
-    for (let px = 0; px < w; px++) {
-      const rx = px * scale;
-      const ry = py * scale;
-
-      const relevantPoints = getPointsForPixel(rx, ry);
-      if (relevantPoints.length === 0) continue;
-
-      const fi = useFloors ? getFloorForPoint(rx, ry) : -1;
-      const maxDist = useFloors && fi !== -1 ? floorMaxDist[fi] : globalMaxDist;
-
-      let weightSum = 0;
-      let valueSum = 0;
-      let nearest = Infinity;
-
-      for (const pt of relevantPoints) {
-        const dist = Math.hypot(pt.x - rx, pt.y - ry);
-        if (dist < nearest) nearest = dist;
-        const val = getPointValue(pt);
-        if (dist < 1) {
-          weightSum = 1;
-          valueSum = val;
-          nearest = 0;
-          break;
+  for (let py=0;py<h;py++) {
+    for (let px=0;px<w;px++) {
+      const rx=px*scale, ry=py*scale;
+      const rp=getPixelPts(rx,ry);
+      if (rp.length===0) continue;
+      const fi=useFloors?getFloor(rx,ry):-1;
+      const maxDist=useFloors&&fi!==-1?floorMaxDist[fi]:globalMaxDist;
+      let ws=0,vs=0,nearest=Infinity;
+      for (const pt of rp) {
+        const dist=Math.hypot(pt.x-rx,pt.y-ry);
+        if (dist<nearest) nearest=dist;
+        if (dist<1) { ws=1;vs=pt.val;nearest=0;break; }
+        let wt=1/Math.pow(dist,power);
+        if (wallSegs.length>0) {
+          const cr=countWalls(rx,ry,pt.x,pt.y);
+          for (const s of cr) wt*=1.0-s*(1.0-WALL_ATTEN_MAX);
         }
-        let wt = 1 / Math.pow(dist, power);
-        if (walls.length > 0) {
-          const crossed = countWallCrossings(rx, ry, pt.x, pt.y);
-          for (const str of crossed) {
-            const atten = 1.0 - str * (1.0 - WALL_ATTENUATION_MAX);
-            wt *= atten;
-          }
-        }
-        weightSum += wt;
-        valueSum += wt * val;
+        ws+=wt; vs+=wt*pt.val;
       }
-
-      const htFallback = document.getElementById('heatmapType')?.value;
-      const defaultVal = htFallback === 'snr' ? 0 : htFallback === 'connectivity' ? 0 : -100;
-      const value = weightSum > 0 ? valueSum / weightSum : defaultVal;
-      const distFade = nearest < maxDist ? 1 : Math.max(0, 1 - (nearest - maxDist) / (maxDist * 0.5));
-
-      const color = valueToColor(value);
-      const idx = (py * w + px) * 4;
-      data[idx] = color[0];
-      data[idx + 1] = color[1];
-      data[idx + 2] = color[2];
-      data[idx + 3] = Math.round(opacity * 200 * distFade);
+      const value=ws>0?vs/ws:defaultVal;
+      const distFade=nearest<maxDist?1:Math.max(0,1-(nearest-maxDist)/(maxDist*0.5));
+      const color=valueToColor(value);
+      const idx=(py*w+px)*4;
+      data[idx]=color[0]; data[idx+1]=color[1]; data[idx+2]=color[2];
+      data[idx+3]=Math.round(opacity*200*distFade);
     }
   }
-
-  ctx.putImageData(imgData, 0, 0);
-
-  hmCtx.imageSmoothingEnabled = true;
-  hmCtx.imageSmoothingQuality = 'high';
-
-  const closedPerimeters = floorRegions.filter(f => f.vertices && f.vertices.length >= 3);
-  if (closedPerimeters.length > 0) {
-    hmCtx.save();
-    hmCtx.beginPath();
-    for (const perim of closedPerimeters) {
-      hmCtx.moveTo(perim.vertices[0].x, perim.vertices[0].y);
-      for (let i = 1; i < perim.vertices.length; i++) {
-        hmCtx.lineTo(perim.vertices[i].x, perim.vertices[i].y);
-      }
-      hmCtx.closePath();
-    }
-    hmCtx.clip();
-    hmCtx.drawImage(offscreen, 0, 0, canvasW, canvasH);
-    hmCtx.restore();
-  } else {
-    hmCtx.drawImage(offscreen, 0, 0, canvasW, canvasH);
+  self.postMessage({ id, data: data.buffer, w, h }, [data.buffer]);
+  } catch(err) {
+    self.postMessage({ id, error: err.message });
   }
+};
+`;
+let _heatmapWorker = null;
+let _heatmapWorkerUrl = null;
+let _heatmapMsgId = 0;
+const _heatmapCallbacks = {};
+function _getHeatmapWorker() {
+  if (!_heatmapWorker) {
+    const blob = new Blob([_heatmapWorkerCode], { type: 'application/javascript' });
+    _heatmapWorkerUrl = URL.createObjectURL(blob);
+    _heatmapWorker = new Worker(_heatmapWorkerUrl);
+    _heatmapWorker.onmessage = function(e) {
+      const { id, data: buf, w, h, error } = e.data;
+      const cb = _heatmapCallbacks[id];
+      if (cb) {
+        delete _heatmapCallbacks[id];
+        if (error) { console.error('Heatmap worker error:', error); cb(null); }
+        else cb({ buf, w, h });
+      }
+    };
+    _heatmapWorker.onerror = function(e) {
+      console.error('Heatmap worker error:', e.message);
+      // Resolve all pending callbacks so nothing hangs
+      for (const id in _heatmapCallbacks) {
+        _heatmapCallbacks[id](null);
+        delete _heatmapCallbacks[id];
+      }
+    };
+  }
+  return _heatmapWorker;
 }
+
+function drawHeatmapAsync() {
+  return new Promise(resolve => {
+    hmCtx.clearRect(0, 0, canvasW, canvasH);
+    updateLegend();
+
+    const filteredPts = getFilteredPoints();
+    if (filteredPts.length === 0) { resolve(); return; }
+
+    const opacity = document.getElementById('opacitySlider').value / 100;
+    const htype = document.getElementById('heatmapType')?.value || 'signal';
+    const thresholds = getColorThresholds();
+    const scale = 4;
+    const w = Math.ceil(canvasW / scale);
+    const h = Math.ceil(canvasH / scale);
+
+    const pts = filteredPts.map(p => ({ x: p.x, y: p.y, val: getPointValue(p) }));
+    const wallSegs = walls.map(wl => ({ x1: wl.x1, y1: wl.y1, x2: wl.x2, y2: wl.y2, strength: wl.strength || 0.5 }));
+    const floors = floorRegions.filter(f => f.vertices && f.vertices.length >= 3).map(f => f.vertices);
+
+    const id = ++_heatmapMsgId;
+    const worker = _getHeatmapWorker();
+
+    _heatmapCallbacks[id] = function(result) {
+      if (!result) { resolve(); return; }
+      const pixelData = new Uint8ClampedArray(result.buf);
+      const offscreen = document.createElement('canvas');
+      offscreen.width = result.w;
+      offscreen.height = result.h;
+      const ctx = offscreen.getContext('2d');
+      const imgData = ctx.createImageData(result.w, result.h);
+      imgData.data.set(pixelData);
+      ctx.putImageData(imgData, 0, 0);
+
+      hmCtx.imageSmoothingEnabled = true;
+      hmCtx.imageSmoothingQuality = 'high';
+
+      const closedPerimeters = floorRegions.filter(f => f.vertices && f.vertices.length >= 3);
+      if (closedPerimeters.length > 0) {
+        hmCtx.save();
+        hmCtx.beginPath();
+        for (const perim of closedPerimeters) {
+          hmCtx.moveTo(perim.vertices[0].x, perim.vertices[0].y);
+          for (let i = 1; i < perim.vertices.length; i++) hmCtx.lineTo(perim.vertices[i].x, perim.vertices[i].y);
+          hmCtx.closePath();
+        }
+        hmCtx.clip();
+        hmCtx.drawImage(offscreen, 0, 0, canvasW, canvasH);
+        hmCtx.restore();
+      } else {
+        hmCtx.drawImage(offscreen, 0, 0, canvasW, canvasH);
+      }
+      resolve();
+    };
+
+    // Timeout safety — resolve after 30s even if worker doesn't respond
+    const timeout = setTimeout(() => {
+      if (_heatmapCallbacks[id]) {
+        console.warn('Heatmap worker timed out after 30s');
+        delete _heatmapCallbacks[id];
+        resolve();
+      }
+    }, 30000);
+    const origCb = _heatmapCallbacks[id];
+    _heatmapCallbacks[id] = function(result) {
+      clearTimeout(timeout);
+      origCb(result);
+    };
+
+    worker.postMessage({
+      id, pts, wallSegs, floors, w, h, scale, opacity, htype, thresholds,
+      WALL_ATTEN_MAX: WALL_ATTENUATION_MAX,
+    });
+  });
+}
+
+// Sync drawHeatmap removed — all rendering goes through web worker via drawHeatmapAsync()
 
 function drawPoints() {
   // Clear full padded overlay canvas and set translate so (0,0) = image origin
@@ -4788,11 +5054,38 @@ function updateThreshLabels() {
   document.getElementById('connThreshWeakVal').textContent = document.getElementById('connThreshWeak').value;
 }
 
+async function applyThresholds() {
+  setStatus('scanning', 'Updating heatmap...');
+  const t0 = performance.now();
+  await updateHeatmapAsync();
+  const renderTime = ((performance.now() - t0) / 1000).toFixed(1);
+  saveData();
+  logAction('Thresholds applied (' + renderTime + 's)');
+  toast('Thresholds applied (' + renderTime + 's)');
+}
+
+async function applyDisplay() {
+  setStatus('scanning', 'Updating heatmap...');
+  const t0 = performance.now();
+  await updateHeatmapAsync();
+  const renderTime = ((performance.now() - t0) / 1000).toFixed(1);
+  saveData();
+  logAction('Display updated (' + renderTime + 's)');
+  toast('Display updated (' + renderTime + 's)');
+}
+
 function switchThresholdPanel() {
   const htype = document.getElementById('heatmapType')?.value || 'signal';
   document.getElementById('threshSignal').style.display = htype === 'signal' ? '' : 'none';
   document.getElementById('threshSNR').style.display = htype === 'snr' ? '' : 'none';
   document.getElementById('threshConn').style.display = htype === 'connectivity' ? '' : 'none';
+  // Show/hide speed test note
+  const speedOn = document.getElementById('speedTestEnabled')?.checked;
+  const note = document.getElementById('connSpeedNote');
+  if (note) note.style.display = (htype === 'connectivity' && !speedOn) ? '' : 'none';
+  if (htype === 'connectivity' && !speedOn) {
+    toast('Enable "Speed Test" under Analyze for accurate connectivity data');
+  }
 }
 
 // ── SSID Filter List ──
@@ -4960,19 +5253,20 @@ function startScaleCalibration() {
   document.getElementById('scaleCalibrateBtn').classList.add('active');
   document.getElementById('scaleCalibrateBtn').textContent = 'Click 2 points on floor plan...';
   canvasArea.style.cursor = 'crosshair';
-  toast('Click the first point of a known distance');
+  document.getElementById('statusText').textContent = 'Scale calibration — click the first point';
 }
 
 function handleScaleClick(x, y) {
   if (!scaleCalPt1) {
     scaleCalPt1 = { x, y };
-    toast('Click the second point');
+    document.getElementById('statusText').textContent = 'Scale calibration — click the second point';
     drawPoints(); // to show the first marker
   } else {
     const p1 = scaleCalPt1;
     const p2 = { x, y };
     const distPx = Math.hypot(p2.x - p1.x, p2.y - p1.y);
     scaleCalMode = false;
+    updateStatusText();
     canvasArea.style.cursor = '';
     document.getElementById('scaleCalibrateBtn').textContent = 'Calibrate Scale';
     document.getElementById('scaleCalibrateBtn').classList.remove('active');
@@ -4981,7 +5275,6 @@ function handleScaleClick(x, y) {
     // Store temporarily
     scaleCalibration = { p1, p2, distPx, distReal: null, unit: 'm' };
     drawPoints();
-    toast('Enter the real-world distance');
   }
 }
 
@@ -4991,6 +5284,10 @@ function applyScaleCalibration() {
   if (!dist || dist <= 0 || !scaleCalibration) { toast('Enter a valid distance'); return; }
   scaleCalibration.distReal = dist;
   scaleCalibration.unit = unit;
+  // Clear visual markers but keep calibration data
+  scaleCalibration.p1 = null;
+  scaleCalibration.p2 = null;
+  scaleCalPt1 = null;
   document.getElementById('scaleInputRow').style.display = 'none';
   document.getElementById('scaleClearBtn').style.display = '';
   document.getElementById('scaleInfo').textContent =
@@ -5020,16 +5317,18 @@ function toggleAnnotationMode() {
     btn.classList.add('active');
     btn.textContent = 'Click map to place note...';
     canvasArea.style.cursor = 'crosshair';
-    toast('Click on the map to place a note');
+    document.getElementById('statusText').textContent = 'Annotation mode — click to place a note';
   } else {
     btn.classList.remove('active');
     btn.textContent = '+ Add Note';
     if (!wallMode && !floorMode && !apMode && !scaleCalMode) canvasArea.style.cursor = '';
+    updateStatusText();
   }
 }
 
 function handleAnnotationClick(x, y, clientX, clientY) {
   annotationMode = false;
+  updateStatusText();
   const btn = document.getElementById('annotateBtn');
   btn.classList.remove('active');
   btn.textContent = '+ Add Note';
@@ -5181,6 +5480,40 @@ function saveData() {
   }).catch(() => {});
 }
 
+async function stopServer() {
+  saveData();
+  setStatus('scanning', 'Saving & stopping server...');
+  try {
+    await fetch('/api/stop', { method: 'POST' });
+  } catch {}
+  document.getElementById('statusText').textContent = 'Server stopped';
+  document.getElementById('statusDot').className = 'status-dot offline';
+}
+
+async function restartServer() {
+  saveData();
+  setStatus('scanning', 'Saving & restarting server...');
+  try {
+    await fetch('/api/restart', { method: 'POST' });
+  } catch {}
+  // Wait for server to come back up, then reload
+  const poll = setInterval(async () => {
+    try {
+      const r = await fetch('/api/scan');
+      if (r.ok) {
+        clearInterval(poll);
+        location.reload();
+      }
+    } catch {}
+  }, 500);
+  // Timeout after 15s
+  setTimeout(() => {
+    clearInterval(poll);
+    document.getElementById('statusText').textContent = 'Restart timed out — try refreshing';
+    document.getElementById('statusDot').className = 'status-dot offline';
+  }, 15000);
+}
+
 function exportData() {
   snapshotActiveFloorplan();
 
@@ -5208,6 +5541,7 @@ function importData() {
 // ── Toast ──
 let _toastTimer = null;
 function toast(msg) {
+  if (isSpecialMode() || !_initDone) return;
   // Show in topbar status area instead of bottom popup
   const st = document.getElementById('statusText');
   st.textContent = msg;
@@ -5215,14 +5549,19 @@ function toast(msg) {
   _toastTimer = setTimeout(() => { updateStatusText(); }, 3000);
 }
 function updateStatusText() {
+  if (isSpecialMode()) return;
+  if (!_initDone) return;
   // Restore the normal status (connected SSID or idle)
   const st = document.getElementById('statusText');
+  const dot = document.getElementById('statusDot');
   const ssid = document.getElementById('signalSSID')?.textContent;
   const sig = document.getElementById('signalBig')?.textContent;
   if (ssid && ssid !== 'Not connected' && sig && sig !== '—') {
     st.textContent = ssid + ' · ' + sig + ' dBm';
+    dot.className = 'status-dot';
   } else {
     st.textContent = 'Ready';
+    dot.className = 'status-dot offline';
   }
 }
 
@@ -5274,6 +5613,9 @@ function renderConsole() {
 window.addEventListener('resize', () => {
   if (floorplanImg) zoomFit();
 });
+
+// ── Start ──
+init();
 </script>
 </body>
 </html>

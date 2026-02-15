@@ -11,6 +11,8 @@ import platform
 import re
 import os
 import sys
+import threading
+import time
 
 import socketserver
 
@@ -336,6 +338,27 @@ class HeatmapHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(info).encode())
             return
 
+        elif self.path == "/api/stop":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"ok": True}).encode())
+            threading.Thread(target=lambda: (time.sleep(0.3), self.server.shutdown())).start()
+            return
+
+        elif self.path == "/api/restart":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"ok": True}).encode())
+            def do_restart():
+                time.sleep(0.3)
+                self.server.shutdown()
+                time.sleep(0.2)
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+            threading.Thread(target=do_restart).start()
+            return
+
         self.send_response(404)
         self.end_headers()
 
@@ -369,6 +392,7 @@ def main():
         print(f"  [+] Connected to: {info['ssid']}")
         print(f"  [+] Signal: {info['signal_dbm']} dBm ({info['signal_percent']}%)\n")
 
+    socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("", PORT), HeatmapHandler) as httpd:
         print(f"  Open http://localhost:{PORT} in your browser")
         print(f"  Press Ctrl+C to stop\n")
