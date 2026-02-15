@@ -643,7 +643,7 @@
     top: 0;
     left: 0;
   }
-  #map-canvas { z-index: 0; pointer-events: none; }
+  #map-canvas { z-index: 0; pointer-events: none; /* positioned via JS with MAP_PAD offset */ }
   #floorplan-canvas { z-index: 1; }
   #heatmap-canvas { z-index: 2; pointer-events: none; }
   #points-canvas { z-index: 3; pointer-events: none; }
@@ -1818,6 +1818,7 @@ let mapAlignPendingMapPt = null; // map point waiting for its floorplan match
 // DOM refs
 const canvasArea = document.getElementById('canvasArea');
 const OVERLAY_PAD = 500;  // extra px around image for overlay drawing
+const MAP_PAD = 3000;     // extra px around floor plan for satellite map overflow
 const container = document.getElementById('canvasContainer');
 const mapCanvas = document.getElementById('map-canvas');
 const fpCanvas = document.getElementById('floorplan-canvas');
@@ -2365,8 +2366,7 @@ function loadFloorplanFromDataURL(dataURL, skipStripReset) {
 
       fpCanvas.width = hmCanvas.width = canvasW;
       fpCanvas.height = hmCanvas.height = canvasH;
-      mapCanvas.width = canvasW;
-      mapCanvas.height = canvasH;
+      sizeMapCanvas();
       ptCanvas.width = canvasW + OVERLAY_PAD * 2;
       ptCanvas.height = canvasH + OVERLAY_PAD * 2;
       ptCanvas.style.left = -OVERLAY_PAD + 'px';
@@ -2507,8 +2507,7 @@ function switchToFloorplan(id) {
 
     fpCanvas.width = hmCanvas.width = canvasW;
     fpCanvas.height = hmCanvas.height = canvasH;
-    mapCanvas.width = canvasW;
-    mapCanvas.height = canvasH;
+    sizeMapCanvas();
     ptCanvas.width = canvasW + OVERLAY_PAD * 2;
     ptCanvas.height = canvasH + OVERLAY_PAD * 2;
     ptCanvas.style.left = -OVERLAY_PAD + 'px';
@@ -3275,7 +3274,7 @@ function latLngToTile(lat, lng, zoom) {
 
 async function fetchAndStitchTiles(lat, lng, zoom) {
   const TILE_SIZE = 256;
-  const GRID = 9;
+  const GRID = 21;
   const HALF = Math.floor(GRID / 2);
   const center = latLngToTile(lat, lng, zoom);
 
@@ -3326,9 +3325,8 @@ async function loadSatelliteMap() {
   mapTilesImage = img;
   mapState.tilesDataURL = img.toDataURL('image/jpeg', 0.75);
 
-  // Size map canvas to match floorplan
-  mapCanvas.width = canvasW;
-  mapCanvas.height = canvasH;
+  // Size map canvas (floorplan + padding for overflow)
+  sizeMapCanvas();
 
   // Reset alignment for fresh load
   mapState.affine = null;
@@ -3355,6 +3353,17 @@ function syncMapControlsFromState() {
   document.getElementById('mapOutsideOnly').checked = mapState.outsideOnly;
 }
 
+function sizeMapCanvas() {
+  const mw = canvasW + 2 * MAP_PAD;
+  const mh = canvasH + 2 * MAP_PAD;
+  if (mapCanvas.width !== mw || mapCanvas.height !== mh) {
+    mapCanvas.width = mw;
+    mapCanvas.height = mh;
+    mapCanvas.style.top = -MAP_PAD + 'px';
+    mapCanvas.style.left = -MAP_PAD + 'px';
+  }
+}
+
 function renderMapCanvas() {
   if (!mapTilesImage) return;
   if (!canvasW || !canvasH) return;
@@ -3364,33 +3373,25 @@ function renderMapCanvas() {
   mapState.visible = document.getElementById('mapVisible').checked;
   mapState.outsideOnly = document.getElementById('mapOutsideOnly').checked;
 
-  // Ensure canvas matches floorplan
-  if (mapCanvas.width !== canvasW || mapCanvas.height !== canvasH) {
-    mapCanvas.width = canvasW;
-    mapCanvas.height = canvasH;
-  }
-  mapCtx.clearRect(0, 0, canvasW, canvasH);
+  // Ensure canvas matches floorplan + padding for map overflow
+  sizeMapCanvas();
+  const mw = mapCanvas.width, mh = mapCanvas.height;
+  mapCtx.clearRect(0, 0, mw, mh);
 
   if (!mapState.visible) return;
 
   mapCtx.save();
   mapCtx.globalAlpha = mapState.opacity;
 
+  // Offset so floor plan coord (0,0) → map canvas pixel (MAP_PAD, MAP_PAD)
+  mapCtx.translate(MAP_PAD, MAP_PAD);
+
   if (mapState.affine) {
-    // Apply affine transform: maps map-image coords → canvas coords
+    // Apply affine transform: maps map-image coords → floor plan canvas coords
     const [a, b, c, d, tx, ty] = mapState.affine;
-    // Debug: check where the image corners end up on canvas
-    const tw = mapTilesImage.width, th = mapTilesImage.height;
-    const corners = [
-      { x: a*0 + c*0 + tx, y: b*0 + d*0 + ty },
-      { x: a*tw + c*0 + tx, y: b*tw + d*0 + ty },
-      { x: a*tw + c*th + tx, y: b*tw + d*th + ty },
-      { x: a*0 + c*th + tx, y: b*0 + d*th + ty },
-    ];
-    console.log('Map corners on canvas:', corners, 'canvas:', canvasW, canvasH);
-    mapCtx.setTransform(a, b, c, d, tx, ty);
+    mapCtx.setTransform(a, b, c, d, tx + MAP_PAD, ty + MAP_PAD);
   } else {
-    // No alignment yet — scale to fit canvas and center
+    // No alignment yet — scale to fit floor plan area and center
     const tw = mapTilesImage.width;
     const th = mapTilesImage.height;
     const fitScale = Math.min(canvasW / tw, canvasH / th) * 0.85;
@@ -3464,11 +3465,12 @@ function applyPerimeterCutout() {
   mapCtx.globalCompositeOperation = 'destination-out';
   mapCtx.fillStyle = 'rgba(0,0,0,1)';
 
+  // Offset floor plan coords → map canvas coords
   for (const perim of perimeters) {
     mapCtx.beginPath();
-    mapCtx.moveTo(perim.vertices[0].x, perim.vertices[0].y);
+    mapCtx.moveTo(perim.vertices[0].x + MAP_PAD, perim.vertices[0].y + MAP_PAD);
     for (let i = 1; i < perim.vertices.length; i++) {
-      mapCtx.lineTo(perim.vertices[i].x, perim.vertices[i].y);
+      mapCtx.lineTo(perim.vertices[i].x + MAP_PAD, perim.vertices[i].y + MAP_PAD);
     }
     mapCtx.closePath();
     mapCtx.fill();
