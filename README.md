@@ -4,6 +4,8 @@ A free, local WiFi heatmap tool — like Ekahau or NetSpot, but runs entirely on
 
 ![Python](https://img.shields.io/badge/python-3.7+-blue) ![No Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen) ![License](https://img.shields.io/badge/license-MIT-green)
 
+![wifi-map screenshot](screenshot.png)
+
 ## Quick Start
 
 **Windows** — double-click `start.bat`
