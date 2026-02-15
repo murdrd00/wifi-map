@@ -1253,6 +1253,7 @@
             <button class="btn" style="font-size:12px; padding:4px 10px" onclick="loadSatelliteMap()">Go</button>
           </div>
         </div>
+        <p id="mapStripWarning" style="display:none; font-size:10px; color:var(--red, #ef4444); margin:4px 0 0; line-height:1.4">⚠ Strip the floor plan background first (Tools → Strip Background) so the satellite map is visible through it.</p>
         <div id="mapControls" style="display:none">
           <div class="dm-row">
             <label>Map Opacity</label>
@@ -1791,6 +1792,7 @@ async function loadSavedData(data) {
             document.getElementById('mapBtnRow').style.display = 'none';
             document.getElementById('mapAddressRow').style.display = 'none';
             document.getElementById('mapControls').style.display = '';
+            updateMapStripWarning();
             renderMapCanvas();
             resolve();
           };
@@ -2097,6 +2099,7 @@ function stripFloorplanBg() {
       fpCtx.drawImage(img, 0, 0);
       floorplanStripped = false;
       document.getElementById('stripBgBtn').textContent = 'Strip Background';
+      updateMapStripWarning();
       saveData();
       toast('Original floor plan restored');
     };
@@ -2202,6 +2205,7 @@ function stripFloorplanBg() {
     floorplanStripped = true;
     btn.textContent = 'Restore Original';
     btn.disabled = false;
+    updateMapStripWarning();
     setStatus('online', currentSignal?.ssid ? `${currentSignal.ssid} · ${currentSignal.signal_dbm} dBm` : 'Connected');
     toast(bgIsLight ? 'Stripped white background' : 'Stripped black background');
   }, 50);
@@ -2329,6 +2333,7 @@ function switchToFloorplan(id) {
       document.getElementById('mapBtnRow').style.display = 'none';
       document.getElementById('mapAddressRow').style.display = 'none';
       document.getElementById('mapControls').style.display = '';
+      updateMapStripWarning();
       renderMapCanvas();
     };
     mapImg.src = mapState.tilesDataURL;
@@ -2601,11 +2606,12 @@ function onMouseDown(e) {
       updateApList();
       drawPoints();
       saveData();
+      updateHeatmap();
       const apMsg = ap.name + ' placed';
       toast(apMsg);
       logAction(apMsg, () => {
         const idx = accessPoints.indexOf(ap);
-        if (idx >= 0) { accessPoints.splice(idx, 1); updateApList(); drawPoints(); saveData(); }
+        if (idx >= 0) { accessPoints.splice(idx, 1); updateApList(); drawPoints(); saveData(); updateHeatmap(); }
       });
       return;
     }
@@ -3060,9 +3066,19 @@ function setMode(m) {
 function showMapAddressField() {
   document.getElementById('mapBtnRow').style.display = 'none';
   document.getElementById('mapAddressRow').style.display = '';
+  updateMapStripWarning();
   const input = document.getElementById('mapAddressInput');
   input.value = mapState.address || '';
   setTimeout(() => input.focus(), 50);
+}
+
+function updateMapStripWarning() {
+  const warn = document.getElementById('mapStripWarning');
+  if (!warn) return;
+  // Show warning if satellite map UI is visible and background hasn't been stripped
+  const mapVisible = document.getElementById('mapAddressRow')?.style.display !== 'none'
+                  || document.getElementById('mapControls')?.style.display !== 'none';
+  warn.style.display = (mapVisible && !floorplanStripped) ? '' : 'none';
 }
 
 async function geocodeAddress(address) {
@@ -3157,6 +3173,7 @@ async function loadSatelliteMap() {
   document.getElementById('mapControls').style.display = '';
   document.getElementById('mapBtnRow').style.display = 'none';
   syncMapControlsFromState();
+  updateMapStripWarning();
 
   renderMapCanvas();
   saveData();
@@ -3524,6 +3541,7 @@ function removeMap() {
   document.getElementById('mapControls').style.display = 'none';
   document.getElementById('mapAddressRow').style.display = 'none';
   document.getElementById('mapBtnRow').style.display = '';
+  updateMapStripWarning();
 
   if (mapAlignMode) cancelMapAlign();
   saveData();
@@ -3854,9 +3872,10 @@ function updateApList() {
       exitApMode();
       drawPoints();
       saveData();
+      updateHeatmap();
       logAction((removed.name || 'AP') + ' deleted', () => {
         accessPoints.splice(removedIdx, 0, removed);
-        exitApMode(); drawPoints(); saveData();
+        exitApMode(); drawPoints(); saveData(); updateHeatmap();
       });
     });
     list.appendChild(div);
@@ -4365,7 +4384,7 @@ function valueToColor(val) {
 // ── Heatmap Web Worker (inline) ──
 const _heatmapWorkerCode = `
 self.onmessage = function(e) {
-  const { id, pts, wallSegs, floors, w, h, scale, opacity, htype, thresholds, WALL_ATTEN_MAX } = e.data;
+  const { id, pts, wallSegs, floors, aps, w, h, scale, opacity, htype, thresholds, WALL_ATTEN_MAX } = e.data;
   try {
 
   function pointInPolygon(px, py, verts) {
@@ -4426,6 +4445,7 @@ self.onmessage = function(e) {
   }
 
   const useFloors = floors.length >= 2;
+  pts.forEach((p, i) => { p._idx = i; });
   const pointFloors = pts.map(p => getFloor(p.x, p.y));
   const floorPointSets = {};
   if (useFloors) {
@@ -4454,6 +4474,20 @@ self.onmessage = function(e) {
   const globalMaxDist = calcMaxDist(pts);
   const power = 2.5;
   const defaultVal = htype==='snr'?0:htype==='connectivity'?0:-100;
+
+  // AP-aware directional bias precomputation
+  const hasAPs = aps && aps.length > 0;
+  let apMPData = null;
+  if (hasAPs) {
+    apMPData = aps.map(ap =>
+      pts.map(pt => {
+        const dx = pt.x - ap.x, dy = pt.y - ap.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        return { dx, dy, dist };
+      })
+    );
+  }
+
   const data = new Uint8ClampedArray(w*h*4);
 
   for (let py=0;py<h;py++) {
@@ -4463,8 +4497,20 @@ self.onmessage = function(e) {
       if (rp.length===0) continue;
       const fi=useFloors?getFloor(rx,ry):-1;
       const maxDist=useFloors&&fi!==-1?floorMaxDist[fi]:globalMaxDist;
+
+      // Precompute AP->pixel vectors once per pixel
+      let apPixelData=null;
+      if (hasAPs) {
+        apPixelData=aps.map(ap => {
+          const dx=rx-ap.x, dy=ry-ap.y;
+          const dist=Math.sqrt(dx*dx+dy*dy);
+          return {dx,dy,dist};
+        });
+      }
+
       let ws=0,vs=0,nearest=Infinity;
-      for (const pt of rp) {
+      for (let pi=0;pi<rp.length;pi++) {
+        const pt=rp[pi];
         const dist=Math.hypot(pt.x-rx,pt.y-ry);
         if (dist<nearest) nearest=dist;
         if (dist<1) { ws=1;vs=pt.val;nearest=0;break; }
@@ -4472,6 +4518,23 @@ self.onmessage = function(e) {
         if (wallSegs.length>0) {
           const cr=countWalls(rx,ry,pt.x,pt.y);
           for (const s of cr) wt*=1.0-s*(1.0-WALL_ATTEN_MAX);
+        }
+        // AP directional bias: weight points by alignment with AP->pixel direction
+        if (hasAPs) {
+          let bestFactor=0;
+          for (let ai=0;ai<aps.length;ai++) {
+            const mp=apMPData[ai][pt._idx];
+            const pp=apPixelData[ai];
+            if (mp.dist<1||pp.dist<1) { bestFactor=1; break; }
+            const dot=mp.dx*pp.dx+mp.dy*pp.dy;
+            const cosAngle=dot/(mp.dist*pp.dist);
+            const angularFactor=(1+cosAngle)/2;
+            const radialRatio=mp.dist/pp.dist;
+            const radialFactor=radialRatio<=1?1:1/(1+(radialRatio-1)*0.5);
+            const combined=angularFactor*radialFactor;
+            if (combined>bestFactor) bestFactor=combined;
+          }
+          wt*=0.05+0.95*bestFactor;
         }
         ws+=wt; vs+=wt*pt.val;
       }
@@ -4530,13 +4593,16 @@ function drawHeatmapAsync() {
     const opacity = document.getElementById('opacitySlider').value / 100;
     const htype = document.getElementById('heatmapType')?.value || 'signal';
     const thresholds = getColorThresholds();
-    const scale = 4;
+    // Adaptive scale: target ~500k pixels max for the worker grid
+    const totalPx = canvasW * canvasH;
+    const scale = totalPx > 8000000 ? 8 : totalPx > 2000000 ? 6 : 4;
     const w = Math.ceil(canvasW / scale);
     const h = Math.ceil(canvasH / scale);
 
     const pts = filteredPts.map(p => ({ x: p.x, y: p.y, val: getPointValue(p) }));
     const wallSegs = walls.map(wl => ({ x1: wl.x1, y1: wl.y1, x2: wl.x2, y2: wl.y2, strength: wl.strength || 0.5 }));
     const floors = floorRegions.filter(f => f.vertices && f.vertices.length >= 3).map(f => f.vertices);
+    const aps = accessPoints.map(a => ({ x: a.x, y: a.y }));
 
     const id = ++_heatmapMsgId;
     const worker = _getHeatmapWorker();
@@ -4573,14 +4639,15 @@ function drawHeatmapAsync() {
       resolve();
     };
 
-    // Timeout safety — resolve after 30s even if worker doesn't respond
+    // Timeout safety — resolve after 120s even if worker doesn't respond
     const timeout = setTimeout(() => {
       if (_heatmapCallbacks[id]) {
-        console.warn('Heatmap worker timed out after 30s');
+        console.warn('Heatmap worker timed out after 120s');
+        logAction('⚠ Heatmap render timed out (120s)');
         delete _heatmapCallbacks[id];
         resolve();
       }
-    }, 30000);
+    }, 120000);
     const origCb = _heatmapCallbacks[id];
     _heatmapCallbacks[id] = function(result) {
       clearTimeout(timeout);
@@ -4588,7 +4655,7 @@ function drawHeatmapAsync() {
     };
 
     worker.postMessage({
-      id, pts, wallSegs, floors, w, h, scale, opacity, htype, thresholds,
+      id, pts, wallSegs, floors, aps, w, h, scale, opacity, htype, thresholds,
       WALL_ATTEN_MAX: WALL_ATTENUATION_MAX,
     });
   });
