@@ -22,27 +22,30 @@ Open **http://localhost:8199** in your browser. No pip installs, no config, no A
 
 1. **Upload a floor plan** — PNG, JPG, or PDF (multi-page PDFs create one floorplan per page)
 2. **Walk to a spot** in your building
-3. **Click that spot** on the floor plan — it auto-scans your WiFi and places a measurement point
+3. **Click that spot** on the floor plan — it instantly places a measurement point using the latest background scan
 4. **Repeat** — the more points, the better the heatmap
 5. **Export** your data as JSON or PNG
 
 ## Features
 
 ### Scanning & Measurement
-- **One-click scanning** — click the map, get a signal reading instantly
+- **Continuous background scanning** — WiFi signal and speed tests run automatically every ~4 seconds; point placement is instant with no scan delay
+- **Live signal display** — sidebar shows current signal strength, SSID, band, channel, and time since last scan
+- **Pause/Resume** — pause the background scanner to save resources; status bar and sidebar reflect the paused state
 - **Dead zone detection** — if no WiFi is found, automatically marks the spot as a dead zone
 - **Manual mode** — use a slider to set dBm values if auto-scan doesn't work on your OS
 - **Internet connectivity detection** — shows whether you have internet access at each point
-- **Speed testing** — optional download speed test at each measurement point
+- **Speed testing** — optional download speed test runs continuously in the background alongside WiFi scans
 - **Network list** — see all nearby WiFi networks with signal strength, band, and channel info
 
 ### Heatmap Analysis
 - **Signal Strength mode** — classic dBm heatmap with customizable color thresholds
 - **Signal-to-Noise (SNR) mode** — visualize signal quality relative to noise floor
 - **Connectivity mode** — color by internet access and download speed instead of signal strength; instantly spot areas with strong WiFi but no internet (misconfigured APs, captive portals, etc.)
+- **Overall Quality mode** — blended score combining signal strength, SNR, and connectivity into a single 0–100 quality rating
 - **Per-SSID filtering** — view the heatmap for a specific network, not just the connected one
 - **Band filtering** — filter by 2.4 GHz, 5 GHz, or 6 GHz
-- **Independent thresholds** — each heatmap mode has its own color threshold sliders (dBm, dB SNR, Mbps)
+- **Independent thresholds** — each heatmap mode has its own color threshold sliders (dBm, dB SNR, Mbps) with a reset-to-defaults button
 - **Internet warning markers** — points with strong signal but no internet get a red warning badge on the map
 - **Color legend** — always-visible legend showing the active color scale and filters
 
@@ -68,6 +71,7 @@ Open **http://localhost:8199** in your browser. No pip installs, no config, no A
 
 ### Satellite Map Overlay
 - **Load by address** — enter any street address to load satellite imagery (Esri World Imagery, no API key needed)
+- **Extended coverage** — satellite map extends well beyond the floor plan boundaries for full surrounding context (parking lots, neighboring buildings, etc.)
 - **Multi-point alignment** — click corresponding points on the satellite map and floor plan to align them. 1 pair = position, 2 pairs = position + rotation + scale, 3+ pairs = full affine correction
 - **Opacity control** — adjustable transparency slider
 - **Outside only mode** — hides the satellite map inside the building perimeter so it's not distracting
@@ -88,6 +92,8 @@ Open **http://localhost:8199** in your browser. No pip installs, no config, no A
 ### Sidebar & Console
 - **Collapsible sidebar** — collapse the entire left panel to maximize the map view
 - **Collapsible sections** — each sidebar section can be individually collapsed; collapsed sections show summary info (connected network, input mode)
+- **Smart defaults** — Input Mode and Network sections start minimized to keep the sidebar clean
+- **Info panel** — collapsible reference sections covering all core features, keyboard shortcuts, and a dBm guide
 - **Activity console** — timestamped log of every action (points placed, walls drawn, items deleted, etc.)
 - **Click-to-undo** — click any console entry to undo that specific action
 
