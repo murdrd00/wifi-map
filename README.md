@@ -21,10 +21,11 @@ Open **http://localhost:8199** in your browser. No pip installs, no config, no A
 ## How It Works
 
 1. **Upload a floor plan** — PNG, JPG, or PDF (multi-page PDFs create one floorplan per page)
-2. **Walk to a spot** in your building
-3. **Click that spot** on the floor plan — it instantly places a measurement point using the latest background scan
-4. **Repeat** — the more points, the better the heatmap
-5. **Export** your data as JSON or PNG
+2. **Mark your access points** — place APs on the map so the heatmap knows where signal originates
+3. **Walk to a spot** in your building
+4. **Click that spot** on the floor plan — it instantly places a measurement point using the latest background scan
+5. **Repeat** — the more points, the better the heatmap
+6. **Export** your data as JSON or PNG
 
 ## Features
 
@@ -65,7 +66,7 @@ Open **http://localhost:8199** in your browser. No pip installs, no config, no A
 - **Wall attenuation** — each wall has a configurable signal attenuation strength
 
 ### Access Points
-- **AP placement** — mark the physical location of your access points on the floor plan
+- **AP placement** — mark the physical location of your access points on the floor plan; AP locations are used in the heatmap calculation to bias signal interpolation toward the source
 - **AP naming** — click to rename (e.g. "Main Router", "Office AP")
 - **Visual indicators** — APs shown as distinct icons on the map
 
