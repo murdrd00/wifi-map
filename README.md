@@ -1,6 +1,6 @@
 # WiFi Heatmap Builder
 
-A local, self-contained WiFi signal heatmap tool — like Ekahau or NetSpot, but free and runs entirely on your machine. Upload a floor plan, walk around clicking to record signal strength, and watch a heatmap build in real time.
+A free, local WiFi heatmap tool — like Ekahau or NetSpot, but runs entirely on your machine with zero setup. Upload a floor plan, walk around clicking to record signal strength, and watch a heatmap build in real time.
 
 ![Python](https://img.shields.io/badge/python-3.7+-blue) ![No Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen) ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -10,157 +10,66 @@ A local, self-contained WiFi signal heatmap tool — like Ekahau or NetSpot, but
 
 **Mac / Linux** — double-click `start.sh` (or run `./start.sh`)
 
-Or manually:
-
-```bash
-python server.py
-```
+Or manually: `python server.py`
 
 Open **http://localhost:8199** in your browser. No pip installs, no config, no API keys.
 
 ## How It Works
 
-1. **Upload a floor plan** — PNG, JPG, or PDF (multi-page PDFs create one floorplan per page)
-2. **Mark your access points** — place APs on the map so the heatmap knows where signal originates
-3. **Walk to a spot** in your building
-4. **Click that spot** on the floor plan — it instantly places a measurement point using the latest background scan
-5. **Repeat** — the more points, the better the heatmap
-6. **Export** your data as JSON or PNG
+1. **Upload a floor plan** (PNG, JPG, or PDF)
+2. **Mark your access points** so the heatmap knows where signal comes from
+3. **Walk around and click** — each click instantly records your WiFi signal at that spot
+4. **Repeat** — more points = better heatmap
+5. **Draw walls** for accurate room-by-room signal modeling
+6. **Export** as JSON or PNG when you're done
+
+WiFi scanning runs continuously in the background (~4s intervals), so clicking is instant — no waiting for scans.
 
 ## Features
 
-### Scanning & Measurement
-- **Continuous background scanning** — WiFi signal and speed tests run automatically every ~4 seconds; point placement is instant with no scan delay
-- **Live signal display** — sidebar shows current signal strength, SSID, band, channel, and time since last scan
-- **Pause/Resume** — pause the background scanner to save resources; status bar and sidebar reflect the paused state
-- **Dead zone detection** — if no WiFi is found, automatically marks the spot as a dead zone
-- **Manual mode** — use a slider to set dBm values if auto-scan doesn't work on your OS
-- **Internet connectivity detection** — shows whether you have internet access at each point
-- **Speed testing** — optional download speed test runs continuously in the background alongside WiFi scans
-- **Network list** — see all nearby WiFi networks with signal strength, band, and channel info
+**Heatmap modes** — Signal Strength (dBm), Signal-to-Noise Ratio, Connectivity (internet speed), and Overall Quality (blended score of all three). Filter by specific network or band, adjust color thresholds, or reset to defaults.
 
-### Heatmap Analysis
-- **Signal Strength mode** — classic dBm heatmap with customizable color thresholds
-- **Signal-to-Noise (SNR) mode** — visualize signal quality relative to noise floor
-- **Connectivity mode** — color by internet access and download speed instead of signal strength; instantly spot areas with strong WiFi but no internet (misconfigured APs, captive portals, etc.)
-- **Overall Quality mode** — blended score combining signal strength, SNR, and connectivity into a single 0–100 quality rating
-- **Per-SSID filtering** — view the heatmap for a specific network, not just the connected one
-- **Band filtering** — filter by 2.4 GHz, 5 GHz, or 6 GHz
-- **Independent thresholds** — each heatmap mode has its own color threshold sliders (dBm, dB SNR, Mbps) with a reset-to-defaults button
-- **Internet warning markers** — points with strong signal but no internet get a red warning badge on the map
-- **Color legend** — always-visible legend showing the active color scale and filters
+**Access points** — Place APs on the map and the heatmap biases signal interpolation toward them, producing more realistic coverage patterns. Name them for easy reference.
 
-### Floor Plans
-- **PDF support** — upload PDFs directly; multi-page PDFs create one floorplan per page
-- **Multi-floorplan support** — manage multiple floor plans, switch between them freely
-- **Background stripping** — remove white or black backgrounds from floor plans for a cleaner overlay
-- **Drag & drop upload** — drop an image or PDF directly onto the canvas
+**Walls & perimeter** — Draw walls with material presets (drywall, concrete, metal, etc.) to model signal attenuation between rooms. Trace your building perimeter to clip the heatmap to interior spaces. Walls chain together and snap to endpoints for fast drawing.
 
-### Walls & Perimeter
-- **Wall drawing** — draw interior walls as line segments; walls affect how the heatmap blends signal across rooms
-- **Wall chaining** — walls automatically chain together for fast drawing
-- **Wall material presets** — assign material types (drywall, concrete, metal, etc.) with predefined attenuation values
-- **Perimeter tracing** — trace the building perimeter to clip the heatmap to interior spaces
-- **Multi-perimeter** — trace multiple separate areas on the same floor plan
-- **Snap-to-wall** — new walls snap to existing wall endpoints, wall lines, perimeter vertices, and perimeter edges
-- **Wall attenuation** — each wall has a configurable signal attenuation strength
+**Satellite map** — Load satellite imagery by street address and align it to your floor plan. Extends well beyond the building for surrounding context. Supports opacity control and outside-only mode.
 
-### Access Points
-- **AP placement** — mark the physical location of your access points on the floor plan; AP locations are used in the heatmap calculation to bias signal interpolation toward the source
-- **AP naming** — click to rename (e.g. "Main Router", "Office AP")
-- **Visual indicators** — APs shown as distinct icons on the map
+**Continuous scanning** — Background WiFi + speed tests run automatically. The sidebar shows live signal info with a real-time counter since last scan. Pause/resume anytime.
 
-### Satellite Map Overlay
-- **Load by address** — enter any street address to load satellite imagery (Esri World Imagery, no API key needed)
-- **Extended coverage** — satellite map extends well beyond the floor plan boundaries for full surrounding context (parking lots, neighboring buildings, etc.)
-- **Multi-point alignment** — click corresponding points on the satellite map and floor plan to align them. 1 pair = position, 2 pairs = position + rotation + scale, 3+ pairs = full affine correction
-- **Opacity control** — adjustable transparency slider
-- **Outside only mode** — hides the satellite map inside the building perimeter so it's not distracting
-- **Visibility toggle** — show/hide the map entirely
-
-### Tools
-- **Scale calibration** — click two points and enter the real-world distance to calibrate measurements
-- **Annotations** — place text notes anywhere on the floor plan
-- **PNG export** — export the full heatmap as an image with legend, annotations, and scale bar
-
-### Display & Navigation
-- **Pan & zoom** — scroll to zoom toward cursor, hold Space to drag, or use the drag mode button
-- **Fit to screen** — one-click button to fit the floor plan to your window
-- **Light/dark theme** — toggle between light and dark mode
-- **Heatmap opacity** — adjustable transparency for the heatmap overlay
-- **Toggle points** — show or hide measurement point markers
-
-### Sidebar & Console
-- **Collapsible sidebar** — collapse the entire left panel to maximize the map view
-- **Collapsible sections** — each sidebar section can be individually collapsed; collapsed sections show summary info (connected network, input mode)
-- **Smart defaults** — Input Mode and Network sections start minimized to keep the sidebar clean
-- **Info panel** — collapsible reference sections covering all core features, keyboard shortcuts, and a dBm guide
-- **Activity console** — timestamped log of every action (points placed, walls drawn, items deleted, etc.)
-- **Click-to-undo** — click any console entry to undo that specific action
-
-### Keyboard Shortcuts
-| Shortcut | Action |
-|----------|--------|
-| Space (hold) | Temporary drag/pan mode |
-| Ctrl/Cmd + Z | Undo last action (points, walls, perimeter vertices, alignment points) |
-| Escape | Cancel current operation (wall chain, alignment, exit mode) |
-| Scroll wheel | Zoom toward cursor |
-
-### Data Management
-- **Export/Import** — save your heatmap data as JSON, reload later or share with others
-- **Auto-save** — data persists in `heatmap_data.json` between sessions
-- **Multi-format data** — v2 format supports multiple floorplans with full state per plan
-- **100% local** — no data leaves your machine
+**Everything else** — Multi-floor support, PDF import, drag & drop, pan/zoom, dark mode, undo (Ctrl+Z), scale calibration, annotations, auto-save, and a built-in info panel explaining every feature.
 
 ## Platform Support
 
 | Platform | Auto-Scan Method |
 |----------|-----------------|
-| macOS | CoreWLAN via `wifi_scan.swift` (primary), `system_profiler` (fallback) |
+| macOS | CoreWLAN via Swift (primary), `system_profiler` (fallback) |
 | Windows | `netsh wlan show interfaces` |
 | Linux | `nmcli` / `/proc/net/wireless` / `iwconfig` |
 
-If auto-scan doesn't work on your setup, switch to **Manual mode** and enter signal values yourself.
+If auto-scan doesn't work on your setup, switch to **Manual mode** and enter signal values with a slider.
 
-## Signal Strength Guide
+## Tips
 
-| dBm Range | Quality | Color |
-|-----------|---------|-------|
-| -30 to -40 | Excellent | Cyan/Blue |
-| -40 to -55 | Good | Green |
-| -55 to -70 | Fair | Yellow |
-| -70 to -85 | Weak | Orange/Red |
-| -85 to -100 | Dead zone | Dark Red |
-
-## Tips for Good Heatmaps
-
-- **More points = better accuracy** — aim for 20-30+ points per floor
-- **Cover the edges** — especially walls, corners, and transition areas
-- **Mark dead spots** — auto-scan handles this, or use manual mode with -95 to -100 dBm
-- **Trace walls** — drawing walls lets the heatmap show signal drop-off between rooms
+- **20-30+ points per floor** for good accuracy
+- **Place your APs first** — they significantly improve heatmap quality
+- **Draw walls** — this is what makes the heatmap show realistic room-by-room drop-off
 - **Trace the perimeter** — clips the heatmap to your building outline
-- **Place your APs** — marking access point locations helps you understand coverage patterns
-- **Use the satellite map** — align a satellite view behind your floor plan for spatial context
-- **Check connectivity** — switch to Connectivity mode to find areas with signal but no internet
+- **Try Connectivity mode** — finds spots with strong WiFi but no actual internet
 
 ## Project Structure
 
 ```
 wifi-map/
-├── server.py         # Python server — WiFi scanning + static file serving
-├── index.html        # Web frontend — entire app in one file
-├── wifi_scan.swift   # macOS WiFi scanner (CoreWLAN)
-├── start.bat         # Windows launcher (double-click to run)
-├── start.sh          # Mac/Linux launcher (double-click to run)
-├── LICENSE           # MIT
+├── server.py         # Python server (WiFi scanning + file serving)
+├── index.html        # Entire web app (single file)
+├── wifi_scan.swift   # macOS WiFi scanner
+├── start.bat         # Windows launcher
+├── start.sh          # Mac/Linux launcher
 └── README.md
 ```
 
-`heatmap_data.json` is created on first use and stores your floor plans, points, walls, perimeters, and settings. It's gitignored since it contains your personal data.
-
-## No Dependencies
-
-Python 3.7+ with zero pip installs. The server uses Python's built-in `http.server` and the frontend is vanilla HTML/CSS/JS. Satellite imagery uses free Esri tiles. PDF support uses [PDF.js](https://mozilla.github.io/pdf.js/) loaded from CDN on first use.
+100% local — no data leaves your machine. Python 3.7+ with zero dependencies.
 
 ## License
 
