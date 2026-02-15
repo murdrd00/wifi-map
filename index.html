@@ -377,6 +377,18 @@
   .sidebar-section.collapsed h3.collapsible { margin-bottom: 0; }
   .sidebar-section.collapsed h3.collapsible::before { transform: rotate(-90deg); }
   .sidebar-section.collapsed .section-body { display: none; }
+  .collapsed-hint {
+    display: none;
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 130px;
+  }
+  .sidebar-section.collapsed .collapsed-hint { display: inline; }
 
   .signal-display {
     text-align: center;
@@ -868,6 +880,63 @@
     justify-content: flex-end;
   }
 
+  /* Heatmap Legend Overlay */
+  .heatmap-legend {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    z-index: 20;
+    min-width: 180px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    pointer-events: auto;
+  }
+  .heatmap-legend .hl-title {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    color: var(--text);
+  }
+  .heatmap-legend .hl-bar {
+    height: 10px;
+    border-radius: 5px;
+    margin-bottom: 2px;
+  }
+  .heatmap-legend .hl-labels {
+    display: flex;
+    justify-content: space-between;
+  }
+  .heatmap-legend .hl-filter {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  /* Annotation markers */
+  .annotation-marker {
+    position: absolute;
+    pointer-events: none;
+    z-index: 4;
+  }
+
+  /* Scale calibration line */
+  .scale-info {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
   /* Scrollbar */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -886,49 +955,19 @@
     </div>
   </div>
   <div class="topbar-actions">
-    <button class="btn" onclick="exportData()" title="Export data as JSON">↓ Export</button>
-    <button class="btn" onclick="importData()" title="Import saved data">↑ Import</button>
-    <div class="btn-wrap">
-      <button class="btn" id="wallBtn">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" stroke="none">
-          <rect x="0" y="0" width="5" height="3"/><rect x="6" y="0" width="5" height="3"/><rect x="12" y="0" width="4" height="3"/>
-          <rect x="0" y="4" width="1" height="3"/><rect x="2" y="4" width="5" height="3"/><rect x="8" y="4" width="5" height="3"/><rect x="14" y="4" width="2" height="3"/>
-          <rect x="0" y="8" width="5" height="3"/><rect x="6" y="8" width="5" height="3"/><rect x="12" y="8" width="4" height="3"/>
-          <rect x="0" y="12" width="1" height="4"/><rect x="2" y="12" width="5" height="4"/><rect x="8" y="12" width="5" height="4"/><rect x="14" y="12" width="2" height="4"/>
-        </svg>
-        Walls
-      </button>
-      <div class="btn-tooltip">Draw interior walls as line segments. Walls affect how the heatmap blends signal across rooms.</div>
-    </div>
-    <div class="btn-wrap">
-      <button class="btn" id="floorBtn">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="1" y="1" width="14" height="6" rx="1"/>
-          <rect x="1" y="9" width="14" height="6" rx="1"/>
-        </svg>
-        Perimeter
-      </button>
-      <div class="btn-tooltip">Trace the perimeter of each floor or building on your floor plan.</div>
-    </div>
-    <div class="dropdown" id="apDropdown">
-      <button class="btn" id="apBtn" onclick="if(apMode){exitApMode();return;} toggleDropdown('apDropdown')">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="8" cy="10" r="2.5"/>
-          <path d="M4.5 7.5a5 5 0 0 1 7 0"/>
-          <path d="M2.5 5.5a8 8 0 0 1 11 0"/>
-        </svg>
-        <span id="apBtnLabel">APs ▾</span>
-      </button>
-      <div class="dropdown-menu" style="min-width: 240px;">
-        <div class="dm-label">Access Points</div>
-        <div class="fp-list" id="apList">
-          <div class="fp-empty">No access points yet</div>
-        </div>
-        <button class="btn" style="width:100%; font-size:12px" id="apPlaceBtn">
-          + Place Access Point
-        </button>
+    <div class="dropdown" id="fileDropdown">
+      <button class="btn" onclick="toggleDropdown('fileDropdown')">File ▾</button>
+      <div class="dropdown-menu left-align" style="min-width: 180px;">
+        <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="exportData(); toggleDropdown('fileDropdown')">↓ Export JSON</button>
+        <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="importData(); toggleDropdown('fileDropdown')">↑ Import JSON</button>
+        <div class="dm-divider"></div>
+        <button class="btn" style="width:100%; font-size:12px" onclick="exportPNG(); toggleDropdown('fileDropdown')">⎙ Export PNG</button>
       </div>
     </div>
+    <!-- Hidden buttons for JS references (wall/floor/AP functionality now in Tools dropdown) -->
+    <button class="btn hidden" id="wallBtn"></button>
+    <button class="btn hidden" id="floorBtn"></button>
+    <button class="btn hidden" id="apBtn"><span id="apBtnLabel"></span></button>
     <div class="dropdown" id="fpDropdown">
       <button class="btn" onclick="toggleDropdown('fpDropdown')">⊞ Floor Plans ▾</button>
       <div class="dropdown-menu" style="min-width: 260px;">
@@ -938,6 +977,169 @@
         </div>
         <button class="btn" style="width:100%; font-size:12px" onclick="document.getElementById('floorplanInput').click(); toggleDropdown('fpDropdown')">
           + Upload Floor Plan
+        </button>
+      </div>
+    </div>
+    <div class="dropdown" id="analyzeDropdown">
+      <button class="btn" onclick="toggleDropdown('analyzeDropdown')">Analyze ▾</button>
+      <div class="dropdown-menu" style="min-width: 260px;">
+        <div class="dm-label">Heatmap Type</div>
+        <div class="dm-row">
+          <select id="heatmapType" onchange="switchThresholdPanel(); updateHeatmap()" style="flex:1; padding:4px 8px; border-radius:5px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif">
+            <option value="signal">Signal Strength (dBm)</option>
+            <option value="snr">Signal-to-Noise (SNR)</option>
+            <option value="connectivity">Connectivity</option>
+          </select>
+        </div>
+        <div class="dm-divider"></div>
+        <div class="dm-label">Filter by Network</div>
+        <div class="dm-row">
+          <select id="heatmapSSID" onchange="updateHeatmap()" style="flex:1; padding:4px 8px; border-radius:5px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif">
+            <option value="">All Networks</option>
+          </select>
+        </div>
+        <div class="dm-divider"></div>
+        <div class="dm-label">Filter by Band</div>
+        <div class="dm-row">
+          <select id="heatmapBand" onchange="updateHeatmap()" style="flex:1; padding:4px 8px; border-radius:5px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif">
+            <option value="">All Bands</option>
+            <option value="2.4 GHz">2.4 GHz only</option>
+            <option value="5 GHz">5 GHz only</option>
+            <option value="6 GHz">6 GHz only</option>
+          </select>
+        </div>
+        <div class="dm-divider"></div>
+        <!-- Signal Strength thresholds -->
+        <div id="threshSignal">
+          <div class="dm-label">Color Thresholds (dBm)</div>
+          <div class="dm-row">
+            <label style="min-width:70px">Excellent</label>
+            <input type="range" min="-80" max="-20" value="-40" id="threshExcellent" oninput="updateThreshLabels(); updateHeatmap()">
+            <span id="threshExcellentVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">-40</span>
+          </div>
+          <div class="dm-row">
+            <label style="min-width:70px">Good</label>
+            <input type="range" min="-90" max="-30" value="-55" id="threshGood" oninput="updateThreshLabels(); updateHeatmap()">
+            <span id="threshGoodVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">-55</span>
+          </div>
+          <div class="dm-row">
+            <label style="min-width:70px">Fair</label>
+            <input type="range" min="-95" max="-40" value="-70" id="threshFair" oninput="updateThreshLabels(); updateHeatmap()">
+            <span id="threshFairVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">-70</span>
+          </div>
+          <div class="dm-row">
+            <label style="min-width:70px">Weak</label>
+            <input type="range" min="-100" max="-50" value="-85" id="threshWeak" oninput="updateThreshLabels(); updateHeatmap()">
+            <span id="threshWeakVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">-85</span>
+          </div>
+        </div>
+        <!-- SNR thresholds -->
+        <div id="threshSNR" style="display:none">
+          <div class="dm-label">Color Thresholds (dB SNR)</div>
+          <div class="dm-row">
+            <label style="min-width:70px">Excellent</label>
+            <input type="range" min="20" max="50" value="40" id="snrThreshExcellent" oninput="updateThreshLabels(); updateHeatmap()">
+            <span id="snrThreshExcellentVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">40</span>
+          </div>
+          <div class="dm-row">
+            <label style="min-width:70px">Good</label>
+            <input type="range" min="15" max="40" value="30" id="snrThreshGood" oninput="updateThreshLabels(); updateHeatmap()">
+            <span id="snrThreshGoodVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">30</span>
+          </div>
+          <div class="dm-row">
+            <label style="min-width:70px">Fair</label>
+            <input type="range" min="10" max="30" value="20" id="snrThreshFair" oninput="updateThreshLabels(); updateHeatmap()">
+            <span id="snrThreshFairVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">20</span>
+          </div>
+          <div class="dm-row">
+            <label style="min-width:70px">Weak</label>
+            <input type="range" min="0" max="20" value="10" id="snrThreshWeak" oninput="updateThreshLabels(); updateHeatmap()">
+            <span id="snrThreshWeakVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">10</span>
+          </div>
+        </div>
+        <!-- Connectivity thresholds -->
+        <div id="threshConn" style="display:none">
+          <div class="dm-label">Color Thresholds (Mbps)</div>
+          <div class="dm-row">
+            <label style="min-width:70px">Excellent</label>
+            <input type="range" min="10" max="500" value="100" id="connThreshExcellent" oninput="updateThreshLabels(); updateHeatmap()">
+            <span id="connThreshExcellentVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">100</span>
+          </div>
+          <div class="dm-row">
+            <label style="min-width:70px">Good</label>
+            <input type="range" min="5" max="200" value="50" id="connThreshGood" oninput="updateThreshLabels(); updateHeatmap()">
+            <span id="connThreshGoodVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">50</span>
+          </div>
+          <div class="dm-row">
+            <label style="min-width:70px">Fair</label>
+            <input type="range" min="1" max="100" value="10" id="connThreshFair" oninput="updateThreshLabels(); updateHeatmap()">
+            <span id="connThreshFairVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">10</span>
+          </div>
+          <div class="dm-row">
+            <label style="min-width:70px">Weak</label>
+            <input type="range" min="0" max="50" value="1" id="connThreshWeak" oninput="updateThreshLabels(); updateHeatmap()">
+            <span id="connThreshWeakVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">1</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="dropdown" id="toolsDropdown">
+      <button class="btn" onclick="toggleDropdown('toolsDropdown')">Tools ▾</button>
+      <div class="dropdown-menu" style="min-width: 240px;">
+        <div class="dm-label">Drawing</div>
+        <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" id="toolsWallBtn" onclick="toggleWallMode(); toggleDropdown('toolsDropdown')">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" stroke="none"><rect x="0" y="0" width="5" height="3"/><rect x="6" y="0" width="5" height="3"/><rect x="12" y="0" width="4" height="3"/><rect x="0" y="4" width="1" height="3"/><rect x="2" y="4" width="5" height="3"/><rect x="8" y="4" width="5" height="3"/><rect x="14" y="4" width="2" height="3"/><rect x="0" y="8" width="5" height="3"/><rect x="6" y="8" width="5" height="3"/><rect x="12" y="8" width="4" height="3"/><rect x="0" y="12" width="1" height="4"/><rect x="2" y="12" width="5" height="4"/><rect x="8" y="12" width="5" height="4"/><rect x="14" y="12" width="2" height="4"/></svg>
+          Draw Walls
+        </button>
+        <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" id="toolsFloorBtn" onclick="toggleFloorMode(); toggleDropdown('toolsDropdown')">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="6" rx="1"/><rect x="1" y="9" width="14" height="6" rx="1"/></svg>
+          Draw Perimeter
+        </button>
+        <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" id="toolsApBtn" onclick="toggleApMode(); toggleDropdown('toolsDropdown')">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="10" r="2.5"/><path d="M4.5 7.5a5 5 0 0 1 7 0"/><path d="M2.5 5.5a8 8 0 0 1 11 0"/></svg>
+          Place Access Points
+        </button>
+        <div id="toolsApList" style="max-height:120px; overflow-y:auto; font-size:11px"></div>
+        <div class="dm-divider"></div>
+        <div class="dm-label">Scale Calibration</div>
+        <div id="scaleStatus">
+          <p id="scaleInfo" style="margin-bottom:6px">Not calibrated</p>
+          <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="startScaleCalibration()" id="scaleCalibrateBtn">
+            Calibrate Scale
+          </button>
+          <div id="scaleInputRow" style="display:none">
+            <div class="dm-row" style="gap:4px">
+              <input type="number" id="scaleDistInput" placeholder="Distance..."
+                     style="flex:1; padding:5px 8px; border-radius:5px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif"
+                     onkeydown="if(event.key==='Enter') applyScaleCalibration()">
+              <select id="scaleUnitSelect" style="padding:5px; border-radius:5px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px">
+                <option value="m">meters</option>
+                <option value="ft">feet</option>
+              </select>
+              <button class="btn" style="font-size:12px; padding:4px 10px" onclick="applyScaleCalibration()">Set</button>
+            </div>
+          </div>
+          <button class="btn" style="width:100%; font-size:12px; display:none" onclick="clearScaleCalibration()" id="scaleClearBtn">
+            Clear Calibration
+          </button>
+        </div>
+        <div class="dm-divider"></div>
+        <div class="dm-label">Annotations</div>
+        <button class="btn" style="width:100%; font-size:12px; margin-bottom:4px" onclick="toggleAnnotationMode()" id="annotateBtn">
+          + Add Note
+        </button>
+        <div id="annotationList" style="max-height:120px; overflow-y:auto; font-size:11px"></div>
+        <div class="dm-divider"></div>
+        <div class="dm-label">Speed Test</div>
+        <div class="dm-row">
+          <label style="min-width:70px">Auto test</label>
+          <input type="checkbox" id="speedTestEnabled" onchange="toast(this.checked ? 'Speed test enabled — each scan will also measure download speed' : 'Speed test disabled')">
+        </div>
+        <p>When enabled, each measurement point will also run a download speed test.</p>
+        <div class="dm-divider"></div>
+        <div class="dm-label">Wall Materials</div>
+        <button class="btn" style="width:100%; font-size:12px" onclick="showWallMaterialDialog()" id="wallMaterialBtn">
+          Configure Presets
         </button>
       </div>
     </div>
@@ -1070,7 +1272,7 @@
 
     <!-- Network Selector -->
     <div class="sidebar-section" id="networkSection" style="display:none">
-      <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Network <span style="font-size:11px; font-weight:400; color:var(--text-dim)" id="networkCount"></span></h3>
+      <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Network <span style="font-size:11px; font-weight:400; color:var(--text-dim)" id="networkCount"></span><span class="collapsed-hint" id="networkHint">Not connected</span></h3>
       <div class="section-body">
         <div id="networkList" class="network-list"></div>
       </div>
@@ -1078,7 +1280,7 @@
 
     <!-- Input Mode -->
     <div class="sidebar-section">
-      <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Input Mode</h3>
+      <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Input Mode<span class="collapsed-hint" id="modeHintCollapsed">Auto Scan</span></h3>
       <div class="section-body">
         <div class="mode-toggle">
           <button class="active" onclick="setMode('auto')" id="modeAuto">Auto Scan</button>
@@ -1164,6 +1366,16 @@
       <canvas id="floorplan-canvas"></canvas>
       <canvas id="heatmap-canvas"></canvas>
       <canvas id="points-canvas"></canvas>
+    </div>
+
+    <!-- Heatmap Legend -->
+    <div class="heatmap-legend" id="heatmapLegend" style="display:none">
+      <div class="hl-title" id="legendTitle">Signal Strength</div>
+      <div class="hl-bar" id="legendBar" style="background:linear-gradient(90deg, #7f1d1d, #ef4444, #f97316, #eab308, #22c55e, #06b6d4)"></div>
+      <div class="hl-labels" id="legendLabels">
+        <span>-100</span><span>-85</span><span>-70</span><span>-55</span><span>-40</span><span>-30</span>
+      </div>
+      <div class="hl-filter" id="legendFilter" style="display:none"></div>
     </div>
 
     <!-- Zoom Controls -->
@@ -1256,6 +1468,27 @@ let wallMousePos = null;     // {x, y} — live cursor position for preview line
 let wallSnapResult = null;   // {x, y, type: 'endpoint'|'line', wallIndex, endIndex} — current snap target
 const WALL_SNAP_SCREEN_PX = 14; // snap radius in screen pixels (consistent feel at any zoom)
 const WALL_ATTENUATION_MAX = 0.15; // weight multiplier at full wall strength (~-8 dB per wall)
+
+// Scale calibration state
+let scaleCalibration = null; // {p1:{x,y}, p2:{x,y}, distPx, distReal, unit}
+let scaleCalMode = false;
+let scaleCalPt1 = null;
+
+// Annotation state
+let annotations = []; // [{id, x, y, text}]
+let annotationMode = false;
+
+// Wall material presets (dB attenuation per wall crossing)
+const WALL_MATERIALS = {
+  'auto':     { label: 'Auto (measured)', atten: null },
+  'drywall':  { label: 'Drywall',         atten: 3 },
+  'wood':     { label: 'Wood',            atten: 4 },
+  'glass':    { label: 'Glass',           atten: 2 },
+  'brick':    { label: 'Brick',           atten: 8 },
+  'concrete': { label: 'Concrete',        atten: 12 },
+  'metal':    { label: 'Metal',           atten: 18 },
+};
+let wallMaterial = 'auto';
 
 // Snap a canvas-space point to nearby wall endpoints or wall lines
 function snapWallPoint(cx, cy) {
@@ -1436,8 +1669,19 @@ function loadSavedData(data) {
         walls = [];
       }
       accessPoints = fp.accessPoints ? JSON.parse(JSON.stringify(fp.accessPoints)) : [];
+      annotations = fp.annotations ? JSON.parse(JSON.stringify(fp.annotations)) : [];
+      scaleCalibration = fp.scaleCalibration ? JSON.parse(JSON.stringify(fp.scaleCalibration)) : null;
+      wallMaterial = fp.wallMaterial || 'auto';
       floorplanStripped = fp.stripped || false;
       originalFloorplanDataURL = fp.originalImage || null;
+
+      // Restore scale UI
+      if (scaleCalibration && scaleCalibration.distReal) {
+        document.getElementById('scaleInfo').textContent =
+          `${scaleCalibration.distReal} ${scaleCalibration.unit} = ${Math.round(scaleCalibration.distPx)} px`;
+        document.getElementById('scaleClearBtn').style.display = '';
+      }
+      updateAnnotationList();
 
       // Load satellite map state
       if (fp.mapState && fp.mapState.tilesDataURL) {
@@ -1533,12 +1777,6 @@ function setupEventListeners() {
     });
   });
 
-  // AP mode button
-  document.getElementById('apPlaceBtn').addEventListener('click', () => {
-    toggleDropdown('apDropdown'); // close dropdown
-    toggleApMode();
-  });
-
   // Floor region buttons
   document.getElementById('floorBtn').addEventListener('click', toggleFloorMode);
   document.getElementById('floorCloseBtn').addEventListener('click', closeCurrentFloor);
@@ -1565,29 +1803,7 @@ function setupEventListeners() {
     const fpName = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim() || 'Floor Plan';
 
     if (file.type === 'application/pdf') {
-      // Render PDF first page to image
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        try {
-          toast('Rendering PDF...');
-          const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(ev.target.result) }).promise;
-          const page = await pdf.getPage(1);
-          // Render at 2x for crisp output
-          const scale = 2;
-          const viewport = page.getViewport({ scale });
-          const offscreen = document.createElement('canvas');
-          offscreen.width = viewport.width;
-          offscreen.height = viewport.height;
-          const ctx = offscreen.getContext('2d');
-          await page.render({ canvasContext: ctx, viewport }).promise;
-          addFloorplan(fpName, offscreen.toDataURL('image/png'));
-          toast('PDF loaded');
-        } catch (err) {
-          toast('Failed to load PDF');
-          console.error(err);
-        }
-      };
-      reader.readAsArrayBuffer(file);
+      loadMultiPagePDF(file);
     } else {
       const reader = new FileReader();
       reader.onload = (ev) => {
@@ -1738,6 +1954,17 @@ function setupEventListeners() {
       }
       if (apMode) {
         exitApMode();
+      }
+      if (scaleCalMode) {
+        scaleCalMode = false;
+        scaleCalPt1 = null;
+        document.getElementById('scaleCalibrateBtn').textContent = 'Calibrate Scale';
+        document.getElementById('scaleCalibrateBtn').classList.remove('active');
+        canvasArea.style.cursor = '';
+        drawPoints();
+      }
+      if (annotationMode) {
+        toggleAnnotationMode();
       }
     }
   });
@@ -1926,6 +2153,9 @@ function snapshotActiveFloorplan() {
   fp.walls = JSON.parse(JSON.stringify(walls));
   fp.floors = JSON.parse(JSON.stringify(floorRegions));
   fp.accessPoints = JSON.parse(JSON.stringify(accessPoints));
+  fp.annotations = JSON.parse(JSON.stringify(annotations));
+  fp.scaleCalibration = scaleCalibration ? JSON.parse(JSON.stringify(scaleCalibration)) : null;
+  fp.wallMaterial = wallMaterial;
   fp.stripped = floorplanStripped;
   fp.originalImage = originalFloorplanDataURL;
   fp.mapState = mapTilesImage ? JSON.parse(JSON.stringify(mapState)) : null;
@@ -1967,8 +2197,23 @@ function switchToFloorplan(id) {
     walls = [];
   }
   accessPoints = fp.accessPoints ? JSON.parse(JSON.stringify(fp.accessPoints)) : [];
+  annotations = fp.annotations ? JSON.parse(JSON.stringify(fp.annotations)) : [];
+  scaleCalibration = fp.scaleCalibration ? JSON.parse(JSON.stringify(fp.scaleCalibration)) : null;
+  wallMaterial = fp.wallMaterial || 'auto';
   floorplanStripped = fp.stripped || false;
   originalFloorplanDataURL = fp.originalImage || null;
+
+  // Restore scale UI
+  if (scaleCalibration && scaleCalibration.distReal) {
+    document.getElementById('scaleInfo').textContent =
+      `${scaleCalibration.distReal} ${scaleCalibration.unit} = ${Math.round(scaleCalibration.distPx)} px`;
+    document.getElementById('scaleClearBtn').style.display = '';
+  } else {
+    document.getElementById('scaleInfo').textContent = 'Not calibrated';
+    document.getElementById('scaleClearBtn').style.display = 'none';
+    document.getElementById('scaleInputRow').style.display = 'none';
+  }
+  updateAnnotationList();
 
   // Load satellite map state
   if (fp.mapState && fp.mapState.tilesDataURL) {
@@ -2048,6 +2293,9 @@ function addFloorplan(name, dataURL) {
     walls: [],
     floors: [],
     accessPoints: [],
+    annotations: [],
+    scaleCalibration: null,
+    wallMaterial: 'auto',
     stripped: false,
     originalImage: null,
     mapState: null,
@@ -2060,6 +2308,13 @@ function addFloorplan(name, dataURL) {
   walls = [];
   wallStartPoint = null;
   floorRegions = [];
+  annotations = [];
+  scaleCalibration = null;
+  wallMaterial = 'auto';
+  updateAnnotationList();
+  document.getElementById('scaleInfo').textContent = 'Not calibrated';
+  document.getElementById('scaleClearBtn').style.display = 'none';
+  document.getElementById('scaleInputRow').style.display = 'none';
   floorplanStripped = false;
   originalFloorplanDataURL = null;
 
@@ -2199,7 +2454,7 @@ function showConfirm(title, message, onConfirm) {
 // ── Mouse / Pan / Zoom ──
 function onMouseDown(e) {
   if (!floorplanImg) return;
-  if (e.target.closest('.zoom-controls')) return;
+  if (e.target.closest('.zoom-controls') || e.target.closest('.heatmap-legend')) return;
   if (e.button === 1 || e.button === 2 || (e.button === 0 && e.altKey) || (e.button === 0 && dragMode)) {
     isPanning = true;
     lastMouse = { x: e.clientX, y: e.clientY };
@@ -2211,6 +2466,18 @@ function onMouseDown(e) {
     // Map 2-point alignment mode (after drag mode is handled above)
     if (mapAlignMode) {
       handleMapAlignClick(pos.x, pos.y);
+      return;
+    }
+
+    // Scale calibration mode
+    if (scaleCalMode) {
+      handleScaleClick(pos.x, pos.y);
+      return;
+    }
+
+    // Annotation mode
+    if (annotationMode) {
+      handleAnnotationClick(pos.x, pos.y, e.clientX, e.clientY);
       return;
     }
 
@@ -2475,6 +2742,12 @@ async function placePoint(x, y) {
   }
 
   const display = scanInfo ? getDisplayInfo(scanInfo) : null;
+  // Run speed test if enabled
+  let speedMbps = null;
+  if (document.getElementById('speedTestEnabled')?.checked) {
+    speedMbps = await runSpeedTest();
+  }
+
   const point = {
     id: Date.now(),
     x: Math.round(x),
@@ -2487,6 +2760,10 @@ async function placePoint(x, y) {
     link_speed: display?.link_speed || scanInfo?.link_speed || null,
     noise_dbm: display?.noise_dbm || scanInfo?.noise_dbm || null,
     has_internet: scanInfo?.has_internet ?? null,
+    speed_mbps: speedMbps,
+    nearby: scanInfo?.nearby_networks ? scanInfo.nearby_networks.map(n => ({
+      ssid: n.ssid, dbm: n.signal_dbm, band: n.band, channel: n.channel, noise: n.noise_dbm
+    })) : null,
     timestamp: new Date().toISOString(),
   };
 
@@ -2496,8 +2773,9 @@ async function placePoint(x, y) {
   saveData();
 
   const bandStr = point.band ? ` (${point.band})` : '';
+  const speedStr = speedMbps ? ` · ${speedMbps.toFixed(1)} Mbps` : '';
   const ptNum = points.length;
-  const ptMsg = isDeadZone ? 'Dead zone marked' : `Point ${ptNum} placed: ${dbm} dBm${bandStr}`;
+  const ptMsg = isDeadZone ? 'Dead zone marked' : `Point ${ptNum} placed: ${dbm} dBm${bandStr}${speedStr}`;
   toast(ptMsg);
   logAction(ptMsg, () => {
     const idx = points.indexOf(point);
@@ -2547,6 +2825,10 @@ function updateSignalDisplay(info) {
   } else {
     inetEl.style.display = 'none';
   }
+
+  // Update collapsed hint for network section
+  const nh = document.getElementById('networkHint');
+  if (nh) nh.textContent = display.ssid || info.error || 'Not connected';
 }
 
 function getDisplayInfo(info) {
@@ -2652,6 +2934,8 @@ function setMode(m) {
   document.getElementById('modeHint').textContent = m === 'auto'
     ? 'Click on the floor plan to auto-scan and place a measurement point.'
     : 'Set signal strength with the slider, then click to place.';
+  const mhc = document.getElementById('modeHintCollapsed');
+  if (mhc) mhc.textContent = m === 'auto' ? 'Auto Scan' : 'Manual';
 }
 
 // ── Satellite Map ──
@@ -3139,16 +3423,12 @@ function toggleWallMode() {
     wallMousePos = null;
     floorMode = false; exitFloorMode();
     apMode = false; exitApMode();
+    const wallSvg = `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" stroke="none"><rect x="0" y="0" width="5" height="3"/><rect x="6" y="0" width="5" height="3"/><rect x="12" y="0" width="4" height="3"/><rect x="0" y="4" width="1" height="3"/><rect x="2" y="4" width="5" height="3"/><rect x="8" y="4" width="5" height="3"/><rect x="14" y="4" width="2" height="3"/><rect x="0" y="8" width="5" height="3"/><rect x="6" y="8" width="5" height="3"/><rect x="12" y="8" width="4" height="3"/><rect x="0" y="12" width="1" height="4"/><rect x="2" y="12" width="5" height="4"/><rect x="8" y="12" width="5" height="4"/><rect x="14" y="12" width="2" height="4"/></svg>`;
     const btn = document.getElementById('wallBtn');
     btn.classList.add('primary');
-    btn.innerHTML = `
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" stroke="none">
-        <rect x="0" y="0" width="5" height="3"/><rect x="6" y="0" width="5" height="3"/><rect x="12" y="0" width="4" height="3"/>
-        <rect x="0" y="4" width="1" height="3"/><rect x="2" y="4" width="5" height="3"/><rect x="8" y="4" width="5" height="3"/><rect x="14" y="4" width="2" height="3"/>
-        <rect x="0" y="8" width="5" height="3"/><rect x="6" y="8" width="5" height="3"/><rect x="12" y="8" width="4" height="3"/>
-        <rect x="0" y="12" width="1" height="4"/><rect x="2" y="12" width="5" height="4"/><rect x="8" y="12" width="5" height="4"/><rect x="14" y="12" width="2" height="4"/>
-      </svg>
-      Done`;
+    btn.innerHTML = wallSvg + ' Done';
+    const tb = document.getElementById('toolsWallBtn');
+    if (tb) { tb.classList.add('active'); tb.innerHTML = wallSvg + ' Done (drawing)'; }
     document.getElementById('wallSection').classList.remove('hidden');
     document.getElementById('wallClearBtn').classList.remove('hidden');
     canvasArea.style.cursor = 'crosshair';
@@ -3180,6 +3460,17 @@ function exitWallMode() {
     btn.innerHTML = wallIcon + '✓';
   } else {
     btn.innerHTML = wallIcon + 'Walls';
+  }
+  // Update Tools dropdown button
+  const tb = document.getElementById('toolsWallBtn');
+  if (tb) {
+    tb.classList.remove('active');
+    const wallSvg = `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" stroke="none"><rect x="0" y="0" width="5" height="3"/><rect x="6" y="0" width="5" height="3"/><rect x="12" y="0" width="4" height="3"/><rect x="0" y="4" width="1" height="3"/><rect x="2" y="4" width="5" height="3"/><rect x="8" y="4" width="5" height="3"/><rect x="14" y="4" width="2" height="3"/><rect x="0" y="8" width="5" height="3"/><rect x="6" y="8" width="5" height="3"/><rect x="12" y="8" width="4" height="3"/><rect x="0" y="12" width="1" height="4"/><rect x="2" y="12" width="5" height="4"/><rect x="8" y="12" width="5" height="4"/><rect x="14" y="12" width="2" height="4"/></svg>`;
+    if (walls.length > 0) {
+      tb.innerHTML = wallSvg + ` Walls (${walls.length}) ✓`;
+    } else {
+      tb.innerHTML = wallSvg + ' Draw Walls';
+    }
   }
   updateWallList();
   drawPoints();
@@ -3381,6 +3672,11 @@ function toggleApMode() {
     canvasArea.style.cursor = 'crosshair';
     document.getElementById('apBtn').classList.add('active');
     document.getElementById('apBtnLabel').textContent = 'APs ✓';
+    const tb = document.getElementById('toolsApBtn');
+    if (tb) {
+      tb.classList.add('active');
+      tb.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="10" r="2.5"/><path d="M4.5 7.5a5 5 0 0 1 7 0"/><path d="M2.5 5.5a8 8 0 0 1 11 0"/></svg> Done (placing)`;
+    }
     drawPoints();
     toast('Click on the map to place an access point. Escape or click APs to finish.');
   }
@@ -3391,50 +3687,47 @@ function exitApMode() {
   canvasArea.style.cursor = '';
   document.getElementById('apBtn').classList.remove('active');
   document.getElementById('apBtnLabel').textContent = 'APs ▾';
+  // Update Tools dropdown button
+  const tb = document.getElementById('toolsApBtn');
+  if (tb) {
+    tb.classList.remove('active');
+    const apSvg = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="10" r="2.5"/><path d="M4.5 7.5a5 5 0 0 1 7 0"/><path d="M2.5 5.5a8 8 0 0 1 11 0"/></svg>`;
+    if (accessPoints.length > 0) {
+      tb.innerHTML = apSvg + ` APs (${accessPoints.length}) ✓`;
+    } else {
+      tb.innerHTML = apSvg + ' Place Access Points';
+    }
+  }
   updateApList();
   drawPoints();
 }
 
 function updateApList() {
-  const list = document.getElementById('apList');
+  const list = document.getElementById('toolsApList');
+  if (!list) return;
   list.innerHTML = '';
 
-  if (accessPoints.length === 0) {
-    list.innerHTML = '<div class="fp-empty">No access points yet</div>';
-    return;
-  }
+  if (accessPoints.length === 0) return;
 
   accessPoints.forEach((ap, i) => {
     const div = document.createElement('div');
-    div.className = 'fp-item';
+    div.className = 'wall-item';
     div.innerHTML = `
-      <span class="fp-dot" style="background:#22d3ee"></span>
-      <span class="fp-name">${escapeHtml(ap.name)}</span>
-      <button class="fp-del" title="Delete">\u00d7</button>
+      <span class="wall-dot" style="background:#22d3ee"></span>
+      <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer">${escapeHtml(ap.name)}</span>
+      <button class="wall-del" title="Delete">×</button>
     `;
-    // Click: rename inline, or highlight if clicking non-name area
-    div.addEventListener('click', (e) => {
-      if (e.target.classList.contains('fp-del')) return;
-      const nameEl = div.querySelector('.fp-name');
-      startInlineRename(nameEl, ap.name, (newName) => {
-        accessPoints[i].name = newName;
-        saveData();
-        updateApList();
-        drawPoints();
-      });
-    });
-    // Delete button
-    div.querySelector('.fp-del').addEventListener('click', (e) => {
+    div.querySelector('.wall-del').addEventListener('click', (e) => {
       e.stopPropagation();
       const removed = accessPoints[i];
       const removedIdx = i;
       accessPoints.splice(i, 1);
-      updateApList();
+      exitApMode();
       drawPoints();
       saveData();
       logAction((removed.name || 'AP') + ' deleted', () => {
         accessPoints.splice(removedIdx, 0, removed);
-        updateApList(); drawPoints(); saveData();
+        exitApMode(); drawPoints(); saveData();
       });
     });
     list.appendChild(div);
@@ -3466,13 +3759,12 @@ function toggleFloorMode() {
     floorCurrentVerts = [];
     wallMode = false; exitWallMode();
     apMode = false; exitApMode();
+    const floorSvg = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="6" rx="1"/><rect x="1" y="9" width="14" height="6" rx="1"/></svg>`;
     const btn = document.getElementById('floorBtn');
     btn.classList.add('primary');
-    btn.innerHTML = `
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-        <rect x="1" y="1" width="14" height="6" rx="1"/><rect x="1" y="9" width="14" height="6" rx="1"/>
-      </svg>
-      Done`;
+    btn.innerHTML = floorSvg + ' Done';
+    const tb = document.getElementById('toolsFloorBtn');
+    if (tb) { tb.classList.add('active'); tb.innerHTML = floorSvg + ' Done (drawing)'; }
     document.getElementById('floorSection').classList.remove('hidden');
     document.getElementById('floorClearBtn').classList.remove('hidden');
     canvasArea.style.cursor = 'crosshair';
@@ -3520,6 +3812,17 @@ function exitFloorMode() {
     btn.innerHTML = floorIcon + '✓';
   } else {
     btn.innerHTML = floorIcon + 'Perimeter';
+  }
+  // Update Tools dropdown button
+  const tb = document.getElementById('toolsFloorBtn');
+  if (tb) {
+    tb.classList.remove('active');
+    const floorSvg = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="14" height="6" rx="1"/><rect x="1" y="9" width="14" height="6" rx="1"/></svg>`;
+    if (floorRegions.length > 0) {
+      tb.innerHTML = floorSvg + ` Perimeter (${floorRegions.length}) ✓`;
+    } else {
+      tb.innerHTML = floorSvg + ' Draw Perimeter';
+    }
   }
   updateFloorList();
   drawPoints();
@@ -3660,13 +3963,19 @@ function updatePointList() {
     const li = document.createElement('li');
     const name = p.name || `Point ${i + 1}`;
     const bandTag = p.band ? `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:var(--surface2);color:var(--text-dim);margin-left:4px">${p.band}</span>` : '';
+    const speedTag = p.speed_mbps ? `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:var(--surface2);color:var(--text-dim);margin-left:2px">${p.speed_mbps}Mbps</span>` : '';
+    const inetIndicator = p.has_internet === true
+      ? '<span style="font-size:8px;color:#22c55e;margin-right:2px" title="Internet connected">●</span>'
+      : p.has_internet === false
+      ? '<span style="font-size:9px;color:#ef4444;margin-right:2px" title="No internet">⚠</span>'
+      : '';
     li.innerHTML = `
       <div class="info">
         <div class="dot" style="background:${signalColor(p.dbm)}"></div>
-        <span class="name" contenteditable="true" spellcheck="false"
+        ${inetIndicator}<span class="name" contenteditable="true" spellcheck="false"
               data-idx="${i}">${name}</span>
       </div>
-      <span class="dbm">${p.dbm} dBm${bandTag}</span>
+      <span class="dbm">${p.dbm} dBm${bandTag}${speedTag}</span>
       <button class="del-btn" data-id="${p.id}" title="Delete">×</button>
     `;
     // Rename on blur or enter
@@ -3697,6 +4006,10 @@ function updatePointList() {
       if (p.channel) details.push(`Ch ${p.channel}`);
       if (p.link_speed) details.push(p.link_speed);
       if (p.noise_dbm != null) details.push(`Noise: ${p.noise_dbm} dBm`);
+      if (p.noise_dbm != null) details.push(`SNR: ${p.dbm - p.noise_dbm} dB`);
+      if (p.speed_mbps) details.push(`${p.speed_mbps} Mbps`);
+      if (p.has_internet === true) details.push('Internet: Yes');
+      else if (p.has_internet === false) details.push('Internet: No');
       if (p.ssid) details.push(p.ssid);
       const tip = document.getElementById('tooltip');
       tip.textContent = details.join(' · ');
@@ -3715,6 +4028,7 @@ function updatePointList() {
     });
     list.appendChild(li);
   });
+  updateSSIDFilterList();
 }
 
 function deletePoint(id) {
@@ -3822,37 +4136,88 @@ function recalcWallStrengths() {
   }
 }
 
+function getFilteredPoints() {
+  let pts = points;
+  const ssidFilter = document.getElementById('heatmapSSID')?.value || '';
+  const bandFilter = document.getElementById('heatmapBand')?.value || '';
+
+  if (ssidFilter) {
+    // For each point, find the signal for this specific SSID
+    pts = pts.map(p => {
+      if (p.ssid === ssidFilter) return p;
+      if (p.nearby) {
+        const match = p.nearby.find(n => n.ssid === ssidFilter);
+        if (match) return { ...p, dbm: match.dbm, band: match.band, channel: match.channel, noise_dbm: match.noise, ssid: match.ssid };
+      }
+      return null;
+    }).filter(Boolean);
+  }
+
+  if (bandFilter) {
+    pts = pts.filter(p => p.band === bandFilter);
+  }
+
+  return pts;
+}
+
+function getPointValue(pt) {
+  const htype = document.getElementById('heatmapType')?.value || 'signal';
+  if (htype === 'snr') {
+    const noise = pt.noise_dbm ?? -90;
+    return pt.dbm - noise; // SNR in dB
+  }
+  if (htype === 'connectivity') {
+    if (pt.has_internet === false) return 0;
+    if (pt.has_internet == null) return 25;
+    // has_internet === true
+    if (pt.speed_mbps != null && pt.speed_mbps > 0) {
+      const th = getColorThresholds();
+      const cap = Math.max(th.excellent, 100);
+      return 50 + Math.min(pt.speed_mbps, cap) / cap * 50;
+    }
+    return 50;
+  }
+  return pt.dbm;
+}
+
+function valueToColor(val) {
+  const htype = document.getElementById('heatmapType')?.value || 'signal';
+  if (htype === 'snr') return snrToColor(val);
+  if (htype === 'connectivity') return connectivityToColor(val);
+  return dbmToColor(val);
+}
+
 function drawHeatmap() {
   hmCtx.clearRect(0, 0, canvasW, canvasH);
-  if (points.length === 0) return;
+  updateLegend();
+
+  const filteredPts = getFilteredPoints();
+  if (filteredPts.length === 0) return;
 
   const opacity = document.getElementById('opacitySlider').value / 100;
   const useFloors = floorRegions.length >= 2;
 
   // Pre-assign each point to a floor region (-1 = none)
-  const pointFloors = points.map(p => getFloorForPoint(p.x, p.y));
+  const pointFloors = filteredPts.map(p => getFloorForPoint(p.x, p.y));
 
   // Build per-floor point lists if floors are defined
-  // floorPoints[i] = points belonging to floor i, floorPoints[-1] = unassigned
   const floorPointSets = {};
   if (useFloors) {
     for (let fi = 0; fi < floorRegions.length; fi++) floorPointSets[fi] = [];
     floorPointSets[-1] = [];
-    points.forEach((p, i) => {
+    filteredPts.forEach((p, i) => {
       const fi = pointFloors[i];
       (floorPointSets[fi] || floorPointSets[-1]).push(p);
     });
   }
 
-  // Helper: get the relevant points for a given pixel
   function getPointsForPixel(rx, ry) {
-    if (!useFloors) return points;
+    if (!useFloors) return filteredPts;
     const fi = getFloorForPoint(rx, ry);
-    if (fi === -1) return points;  // pixel outside any floor: use all
+    if (fi === -1) return filteredPts;
     return floorPointSets[fi] || [];
   }
 
-  // Auto-calculate influence radius per-floor or globally
   function calcMaxDist(pts) {
     if (pts.length === 0) return 100;
     if (pts.length === 1) return Math.max(canvasW, canvasH) * 0.3;
@@ -3869,16 +4234,14 @@ function drawHeatmap() {
     return (totalNN / pts.length) * 2;
   }
 
-  // Pre-compute maxDist per floor
   const floorMaxDist = {};
   if (useFloors) {
     for (const fi in floorPointSets) {
       floorMaxDist[fi] = calcMaxDist(floorPointSets[fi]);
     }
   }
-  const globalMaxDist = calcMaxDist(points);
+  const globalMaxDist = calcMaxDist(filteredPts);
 
-  // Render at 1/4 res
   const scale = 4;
   const w = Math.ceil(canvasW / scale);
   const h = Math.ceil(canvasH / scale);
@@ -3910,14 +4273,14 @@ function drawHeatmap() {
       for (const pt of relevantPoints) {
         const dist = Math.hypot(pt.x - rx, pt.y - ry);
         if (dist < nearest) nearest = dist;
+        const val = getPointValue(pt);
         if (dist < 1) {
           weightSum = 1;
-          valueSum = pt.dbm;
+          valueSum = val;
           nearest = 0;
           break;
         }
         let wt = 1 / Math.pow(dist, power);
-        // Apply wall attenuation: each wall crossed reduces weight
         if (walls.length > 0) {
           const crossed = countWallCrossings(rx, ry, pt.x, pt.y);
           for (const str of crossed) {
@@ -3926,13 +4289,15 @@ function drawHeatmap() {
           }
         }
         weightSum += wt;
-        valueSum += wt * pt.dbm;
+        valueSum += wt * val;
       }
 
-      const value = weightSum > 0 ? valueSum / weightSum : -100;
+      const htFallback = document.getElementById('heatmapType')?.value;
+      const defaultVal = htFallback === 'snr' ? 0 : htFallback === 'connectivity' ? 0 : -100;
+      const value = weightSum > 0 ? valueSum / weightSum : defaultVal;
       const distFade = nearest < maxDist ? 1 : Math.max(0, 1 - (nearest - maxDist) / (maxDist * 0.5));
 
-      const color = dbmToColor(value);
+      const color = valueToColor(value);
       const idx = (py * w + px) * 4;
       data[idx] = color[0];
       data[idx + 1] = color[1];
@@ -3946,7 +4311,6 @@ function drawHeatmap() {
   hmCtx.imageSmoothingEnabled = true;
   hmCtx.imageSmoothingQuality = 'high';
 
-  // Clip heatmap to perimeter polygons if set
   const closedPerimeters = floorRegions.filter(f => f.vertices && f.vertices.length >= 3);
   if (closedPerimeters.length > 0) {
     hmCtx.save();
@@ -4003,6 +4367,21 @@ function drawPoints() {
     ptCtx.fill();
     ptCtx.fillStyle = '#fff';
     ptCtx.fillText(label, p.x, p.y - 16);
+
+    // Warning indicator: strong signal but no internet
+    if (p.has_internet === false && p.dbm > -70) {
+      ptCtx.beginPath();
+      ptCtx.arc(p.x + 7, p.y + 7, 6, 0, Math.PI * 2);
+      ptCtx.fillStyle = 'rgba(220, 38, 38, 0.9)';
+      ptCtx.fill();
+      ptCtx.strokeStyle = '#fff';
+      ptCtx.lineWidth = 1.5;
+      ptCtx.stroke();
+      ptCtx.font = 'bold 9px sans-serif';
+      ptCtx.textAlign = 'center';
+      ptCtx.fillStyle = '#fff';
+      ptCtx.fillText('!', p.x + 7, p.y + 10);
+    }
   });
 
   // Draw access point pins
@@ -4052,6 +4431,91 @@ function drawPoints() {
     ptCtx.restore();
   });
 
+  // Draw annotations
+  for (const ann of annotations) {
+    ptCtx.save();
+    ptCtx.font = 'bold 11px DM Sans, sans-serif';
+    ptCtx.textAlign = 'center';
+    const metrics = ptCtx.measureText(ann.text);
+    const pw = metrics.width + 10;
+    const ph = 18;
+    // Pill background
+    ptCtx.fillStyle = 'rgba(59, 130, 246, 0.85)';
+    ptCtx.beginPath();
+    ptCtx.roundRect(ann.x - pw / 2, ann.y - ph - 4, pw, ph, 4);
+    ptCtx.fill();
+    // Arrow
+    ptCtx.beginPath();
+    ptCtx.moveTo(ann.x - 4, ann.y - 4);
+    ptCtx.lineTo(ann.x, ann.y + 2);
+    ptCtx.lineTo(ann.x + 4, ann.y - 4);
+    ptCtx.fill();
+    // Text
+    ptCtx.fillStyle = '#fff';
+    ptCtx.fillText(ann.text, ann.x, ann.y - 8);
+    // Dot
+    ptCtx.beginPath();
+    ptCtx.arc(ann.x, ann.y, 3, 0, Math.PI * 2);
+    ptCtx.fillStyle = 'rgba(59, 130, 246, 0.9)';
+    ptCtx.fill();
+    ptCtx.restore();
+  }
+
+  // Draw scale calibration markers
+  if (scaleCalibration && scaleCalibration.p1) {
+    const pts_sc = [scaleCalibration.p1];
+    if (scaleCalibration.p2) pts_sc.push(scaleCalibration.p2);
+    ptCtx.save();
+    ptCtx.strokeStyle = '#f59e0b';
+    ptCtx.lineWidth = 2;
+    ptCtx.setLineDash([6, 4]);
+    if (pts_sc.length === 2) {
+      ptCtx.beginPath();
+      ptCtx.moveTo(pts_sc[0].x, pts_sc[0].y);
+      ptCtx.lineTo(pts_sc[1].x, pts_sc[1].y);
+      ptCtx.stroke();
+      // Distance label
+      if (scaleCalibration.distReal) {
+        const mx = (pts_sc[0].x + pts_sc[1].x) / 2;
+        const my = (pts_sc[0].y + pts_sc[1].y) / 2;
+        const lbl = `${scaleCalibration.distReal} ${scaleCalibration.unit}`;
+        ptCtx.font = 'bold 12px JetBrains Mono, monospace';
+        ptCtx.textAlign = 'center';
+        const tw = ptCtx.measureText(lbl).width + 8;
+        ptCtx.fillStyle = 'rgba(245, 158, 11, 0.85)';
+        ptCtx.setLineDash([]);
+        ptCtx.beginPath();
+        ptCtx.roundRect(mx - tw / 2, my - 20, tw, 18, 4);
+        ptCtx.fill();
+        ptCtx.fillStyle = '#fff';
+        ptCtx.fillText(lbl, mx, my - 6);
+      }
+    }
+    ptCtx.setLineDash([]);
+    for (const sp of pts_sc) {
+      ptCtx.beginPath();
+      ptCtx.arc(sp.x, sp.y, 5, 0, Math.PI * 2);
+      ptCtx.fillStyle = '#f59e0b';
+      ptCtx.fill();
+      ptCtx.beginPath();
+      ptCtx.arc(sp.x, sp.y, 5, 0, Math.PI * 2);
+      ptCtx.strokeStyle = '#fff';
+      ptCtx.lineWidth = 1.5;
+      ptCtx.stroke();
+    }
+    ptCtx.restore();
+  } else if (scaleCalPt1 && scaleCalMode) {
+    ptCtx.save();
+    ptCtx.beginPath();
+    ptCtx.arc(scaleCalPt1.x, scaleCalPt1.y, 5, 0, Math.PI * 2);
+    ptCtx.fillStyle = '#f59e0b';
+    ptCtx.fill();
+    ptCtx.strokeStyle = '#fff';
+    ptCtx.lineWidth = 1.5;
+    ptCtx.stroke();
+    ptCtx.restore();
+  }
+
   // Draw map alignment markers if in align mode
   if (mapAlignMode && (mapAlignPairs.length > 0 || mapAlignPendingMapPt)) {
     drawAlignMarkers();
@@ -4059,22 +4523,106 @@ function drawPoints() {
 }
 
 // ── Color Mapping ──
-function dbmToColor(dbm) {
-  // -100 = dead zone (dark red), -80 = terrible (red), -60 = fair (yellow), -40 = good (green), -30 = great (cyan)
-  const t = Math.max(0, Math.min(1, (dbm + 100) / 70));  // 0 to 1, maps -100 to -30
-
-  // Multi-stop gradient: dark red → red → orange → yellow → green → cyan
-  if (t < 0.15) {
-    return lerpColor([127, 29, 29], [239, 68, 68], t / 0.15);      // dead zone → bad
-  } else if (t < 0.3) {
-    return lerpColor([239, 68, 68], [249, 115, 22], (t - 0.15) / 0.15); // bad → poor
-  } else if (t < 0.5) {
-    return lerpColor([249, 115, 22], [234, 179, 8], (t - 0.3) / 0.2);  // poor → ok
-  } else if (t < 0.75) {
-    return lerpColor([234, 179, 8], [34, 197, 94], (t - 0.5) / 0.25);  // ok → good
-  } else {
-    return lerpColor([34, 197, 94], [6, 182, 212], (t - 0.75) / 0.25); // good → great
+function getColorThresholds() {
+  const htype = document.getElementById('heatmapType')?.value || 'signal';
+  if (htype === 'snr') {
+    return {
+      excellent: parseInt(document.getElementById('snrThreshExcellent')?.value || 40),
+      good: parseInt(document.getElementById('snrThreshGood')?.value || 30),
+      fair: parseInt(document.getElementById('snrThreshFair')?.value || 20),
+      weak: parseInt(document.getElementById('snrThreshWeak')?.value || 10),
+    };
   }
+  if (htype === 'connectivity') {
+    return {
+      excellent: parseInt(document.getElementById('connThreshExcellent')?.value || 100),
+      good: parseInt(document.getElementById('connThreshGood')?.value || 50),
+      fair: parseInt(document.getElementById('connThreshFair')?.value || 10),
+      weak: parseInt(document.getElementById('connThreshWeak')?.value || 1),
+    };
+  }
+  return {
+    excellent: parseInt(document.getElementById('threshExcellent')?.value || -40),
+    good: parseInt(document.getElementById('threshGood')?.value || -55),
+    fair: parseInt(document.getElementById('threshFair')?.value || -70),
+    weak: parseInt(document.getElementById('threshWeak')?.value || -85),
+  };
+}
+
+function dbmToColor(dbm) {
+  const th = getColorThresholds();
+  // Map dbm to 0-1 using thresholds
+  // dead(-100) → weak(th.weak) → fair(th.fair) → good(th.good) → excellent(th.excellent) → best(-30)
+  const stops = [
+    { val: -100,         color: [127, 29, 29] },  // dead zone
+    { val: th.weak,      color: [239, 68, 68] },  // weak
+    { val: (th.weak + th.fair) / 2, color: [249, 115, 22] },  // orange
+    { val: th.fair,      color: [234, 179, 8] },   // fair (yellow)
+    { val: th.good,      color: [34, 197, 94] },   // good (green)
+    { val: th.excellent, color: [6, 182, 212] },    // excellent (cyan)
+  ];
+
+  if (dbm <= stops[0].val) return stops[0].color;
+  if (dbm >= stops[stops.length - 1].val) return stops[stops.length - 1].color;
+
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (dbm <= stops[i + 1].val) {
+      const t = (dbm - stops[i].val) / (stops[i + 1].val - stops[i].val);
+      return lerpColor(stops[i].color, stops[i + 1].color, t);
+    }
+  }
+  return stops[stops.length - 1].color;
+}
+
+function snrToColor(snr) {
+  const th = getColorThresholds();
+  const stops = [
+    { val: 0,            color: [127, 29, 29] },
+    { val: th.weak,      color: [239, 68, 68] },
+    { val: (th.weak + th.fair) / 2, color: [249, 115, 22] },
+    { val: th.fair,      color: [234, 179, 8] },
+    { val: th.good,      color: [34, 197, 94] },
+    { val: th.excellent, color: [6, 182, 212] },
+  ];
+  if (snr <= stops[0].val) return stops[0].color;
+  if (snr >= stops[stops.length - 1].val) return stops[stops.length - 1].color;
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (snr <= stops[i + 1].val) {
+      const t = (snr - stops[i].val) / (stops[i + 1].val - stops[i].val);
+      return lerpColor(stops[i].color, stops[i + 1].color, t);
+    }
+  }
+  return stops[stops.length - 1].color;
+}
+
+function connectivityToColor(val) {
+  // val mapped from speed_mbps via getPointValue: 0=no internet, 25=unknown, 50=internet/no speed, 50-100=speed-based
+  // Thresholds from sliders are in Mbps, but val is 0-100 scale. We use the thresholds to build stops.
+  const th = getColorThresholds();
+  // Map Mbps thresholds to the 0-100 connectivity scale: speed → 50 + min(speed,200)/200*50
+  const cap = Math.max(th.excellent, 100);
+  const mbpsToVal = (mbps) => 50 + Math.min(mbps, cap) / cap * 50;
+  const stops = [
+    { val: 0,                    color: [127, 29, 29] },   // no internet
+    { val: 25,                   color: [100, 100, 100] },  // unknown
+    { val: 50,                   color: [234, 179, 8] },    // internet, no speed
+    { val: mbpsToVal(th.weak),   color: [239, 68, 68] },    // weak speed
+    { val: mbpsToVal(th.fair),   color: [249, 115, 22] },   // fair speed
+    { val: mbpsToVal(th.good),   color: [34, 197, 94] },    // good speed
+    { val: mbpsToVal(th.excellent), color: [6, 182, 212] }, // excellent speed
+  ];
+  // Sort stops by val in case thresholds overlap
+  stops.sort((a, b) => a.val - b.val);
+  if (val <= stops[0].val) return stops[0].color;
+  if (val >= stops[stops.length - 1].val) return stops[stops.length - 1].color;
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (val <= stops[i + 1].val) {
+      const range = stops[i + 1].val - stops[i].val;
+      const t = range > 0 ? (val - stops[i].val) / range : 0;
+      return lerpColor(stops[i].color, stops[i + 1].color, t);
+    }
+  }
+  return stops[stops.length - 1].color;
 }
 
 function lerpColor(a, b, t) {
@@ -4179,6 +4727,441 @@ function startInlineRename(el, currentName, onCommit) {
   el.addEventListener('blur', commit);
   el.addEventListener('keydown', onKey);
   el.addEventListener('mousedown', (e) => e.stopPropagation(), { once: true });
+}
+
+// ── Legend Overlay ──
+function updateLegend() {
+  const legend = document.getElementById('heatmapLegend');
+  if (!legend || points.length === 0) { if (legend) legend.style.display = 'none'; return; }
+  legend.style.display = '';
+
+  const htype = document.getElementById('heatmapType')?.value || 'signal';
+  const titleEl = document.getElementById('legendTitle');
+  const barEl = document.getElementById('legendBar');
+  const labelsEl = document.getElementById('legendLabels');
+  const filterEl = document.getElementById('legendFilter');
+
+  const th = getColorThresholds();
+  if (htype === 'snr') {
+    titleEl.textContent = 'Signal-to-Noise Ratio';
+    barEl.style.background = 'linear-gradient(90deg, #7f1d1d, #ef4444, #f97316, #eab308, #22c55e, #06b6d4)';
+    labelsEl.innerHTML = `<span>0 dB</span><span>${th.weak}</span><span>${th.fair}</span><span>${th.good}</span><span>${th.excellent}</span>`;
+  } else if (htype === 'connectivity') {
+    titleEl.textContent = 'Connectivity';
+    barEl.style.background = 'linear-gradient(90deg, #7f1d1d, #646464, #eab308, #22c55e, #06b6d4)';
+    labelsEl.innerHTML = `<span>No Net</span><span>N/A</span><span>${th.fair} Mbps</span><span>${th.excellent} Mbps</span>`;
+  } else {
+    titleEl.textContent = 'Signal Strength';
+    barEl.style.background = 'linear-gradient(90deg, #7f1d1d, #ef4444, #f97316, #eab308, #22c55e, #06b6d4)';
+    labelsEl.innerHTML = `<span>-100</span><span>${th.weak}</span><span>${th.fair}</span><span>${th.good}</span><span>${th.excellent}</span>`;
+  }
+
+  // Show active filters
+  const ssidF = document.getElementById('heatmapSSID')?.value || '';
+  const bandF = document.getElementById('heatmapBand')?.value || '';
+  if (ssidF || bandF) {
+    const parts = [];
+    if (ssidF) parts.push(ssidF);
+    if (bandF) parts.push(bandF);
+    filterEl.style.display = '';
+    filterEl.textContent = 'Filter: ' + parts.join(' · ');
+  } else {
+    filterEl.style.display = 'none';
+  }
+}
+
+function updateThreshLabels() {
+  // Signal thresholds
+  document.getElementById('threshExcellentVal').textContent = document.getElementById('threshExcellent').value;
+  document.getElementById('threshGoodVal').textContent = document.getElementById('threshGood').value;
+  document.getElementById('threshFairVal').textContent = document.getElementById('threshFair').value;
+  document.getElementById('threshWeakVal').textContent = document.getElementById('threshWeak').value;
+  // SNR thresholds
+  document.getElementById('snrThreshExcellentVal').textContent = document.getElementById('snrThreshExcellent').value;
+  document.getElementById('snrThreshGoodVal').textContent = document.getElementById('snrThreshGood').value;
+  document.getElementById('snrThreshFairVal').textContent = document.getElementById('snrThreshFair').value;
+  document.getElementById('snrThreshWeakVal').textContent = document.getElementById('snrThreshWeak').value;
+  // Connectivity thresholds
+  document.getElementById('connThreshExcellentVal').textContent = document.getElementById('connThreshExcellent').value;
+  document.getElementById('connThreshGoodVal').textContent = document.getElementById('connThreshGood').value;
+  document.getElementById('connThreshFairVal').textContent = document.getElementById('connThreshFair').value;
+  document.getElementById('connThreshWeakVal').textContent = document.getElementById('connThreshWeak').value;
+}
+
+function switchThresholdPanel() {
+  const htype = document.getElementById('heatmapType')?.value || 'signal';
+  document.getElementById('threshSignal').style.display = htype === 'signal' ? '' : 'none';
+  document.getElementById('threshSNR').style.display = htype === 'snr' ? '' : 'none';
+  document.getElementById('threshConn').style.display = htype === 'connectivity' ? '' : 'none';
+}
+
+// ── SSID Filter List ──
+function updateSSIDFilterList() {
+  const sel = document.getElementById('heatmapSSID');
+  if (!sel) return;
+  const current = sel.value;
+  const connectedSSID = document.getElementById('signalSSID')?.textContent;
+  const isConnected = connectedSSID && connectedSSID !== 'Not connected';
+
+  const ssids = new Set();
+  for (const p of points) {
+    if (p.ssid) ssids.add(p.ssid);
+    if (p.nearby) p.nearby.forEach(n => { if (n.ssid) ssids.add(n.ssid); });
+  }
+
+  sel.innerHTML = '<option value="">All Networks</option>';
+
+  // Connected network as second option
+  if (isConnected && ssids.has(connectedSSID)) {
+    const opt = document.createElement('option');
+    opt.value = connectedSSID;
+    opt.textContent = connectedSSID + ' (connected)';
+    if (connectedSSID === current) opt.selected = true;
+    sel.appendChild(opt);
+    ssids.delete(connectedSSID);
+  }
+
+  // Rest sorted alphabetically
+  for (const ssid of [...ssids].sort()) {
+    const opt = document.createElement('option');
+    opt.value = ssid;
+    opt.textContent = ssid;
+    if (ssid === current) opt.selected = true;
+    sel.appendChild(opt);
+  }
+
+  // Default to connected network if no selection has been made yet
+  if (!current && isConnected && sel.querySelector(`option[value="${CSS.escape(connectedSSID)}"]`)) {
+    sel.value = connectedSSID;
+  }
+}
+
+// ── PNG Export ──
+function exportPNG() {
+  if (!floorplanImg) { toast('No floor plan loaded'); return; }
+  const export_canvas = document.createElement('canvas');
+  export_canvas.width = canvasW;
+  export_canvas.height = canvasH;
+  const ectx = export_canvas.getContext('2d');
+
+  // Draw floor plan
+  ectx.drawImage(fpCanvas, 0, 0);
+  // Draw heatmap
+  ectx.drawImage(hmCanvas, 0, 0);
+  // Draw points from ptCanvas (offset by OVERLAY_PAD)
+  ectx.drawImage(ptCanvas, -OVERLAY_PAD, -OVERLAY_PAD);
+
+  // Draw annotations
+  for (const ann of annotations) {
+    ectx.font = 'bold 11px DM Sans, sans-serif';
+    const metrics = ectx.measureText(ann.text);
+    const pw = metrics.width + 10;
+    const ph = 18;
+    ectx.fillStyle = 'rgba(59, 130, 246, 0.85)';
+    ectx.beginPath();
+    ectx.roundRect(ann.x - pw / 2, ann.y - ph - 4, pw, ph, 4);
+    ectx.fill();
+    ectx.fillStyle = '#fff';
+    ectx.textAlign = 'center';
+    ectx.fillText(ann.text, ann.x, ann.y - 8);
+    // Small arrow
+    ectx.beginPath();
+    ectx.moveTo(ann.x - 4, ann.y - 4);
+    ectx.lineTo(ann.x, ann.y + 2);
+    ectx.lineTo(ann.x + 4, ann.y - 4);
+    ectx.fillStyle = 'rgba(59, 130, 246, 0.85)';
+    ectx.fill();
+  }
+
+  // Draw legend in bottom-left
+  const lx = 16, ly = canvasH - 60;
+  ectx.fillStyle = 'rgba(20,23,30,0.85)';
+  ectx.beginPath();
+  ectx.roundRect(lx, ly, 200, 50, 8);
+  ectx.fill();
+  const htype = document.getElementById('heatmapType')?.value || 'signal';
+  ectx.font = 'bold 10px JetBrains Mono, monospace';
+  ectx.fillStyle = '#fff';
+  ectx.textAlign = 'left';
+  const legendLabel = htype === 'snr' ? 'SNR (dB)' : htype === 'connectivity' ? 'Connectivity' : 'Signal (dBm)';
+  ectx.fillText(legendLabel, lx + 8, ly + 14);
+  // Gradient bar
+  const grd = ectx.createLinearGradient(lx + 8, 0, lx + 190, 0);
+  if (htype === 'connectivity') {
+    grd.addColorStop(0, '#7f1d1d');
+    grd.addColorStop(0.25, '#646464');
+    grd.addColorStop(0.5, '#eab308');
+    grd.addColorStop(0.75, '#22c55e');
+    grd.addColorStop(1, '#06b6d4');
+  } else {
+    grd.addColorStop(0, '#7f1d1d');
+    grd.addColorStop(0.2, '#ef4444');
+    grd.addColorStop(0.35, '#f97316');
+    grd.addColorStop(0.5, '#eab308');
+    grd.addColorStop(0.75, '#22c55e');
+    grd.addColorStop(1, '#06b6d4');
+  }
+  ectx.fillStyle = grd;
+  ectx.beginPath();
+  ectx.roundRect(lx + 8, ly + 20, 182, 8, 4);
+  ectx.fill();
+  // Labels
+  ectx.font = '9px JetBrains Mono, monospace';
+  ectx.fillStyle = '#aaa';
+  if (htype === 'snr') {
+    ectx.fillText('0', lx + 8, ly + 42);
+    ectx.fillText('40+', lx + 170, ly + 42);
+  } else if (htype === 'connectivity') {
+    ectx.fillText('No Net', lx + 4, ly + 42);
+    ectx.fillText('Fast', lx + 172, ly + 42);
+  } else {
+    ectx.fillText('-100', lx + 4, ly + 42);
+    ectx.fillText('-30', lx + 172, ly + 42);
+  }
+
+  // Scale bar if calibrated
+  if (scaleCalibration) {
+    const pxPerUnit = scaleCalibration.distPx / scaleCalibration.distReal;
+    const unitLabel = scaleCalibration.unit === 'ft' ? 'ft' : 'm';
+    // Choose a nice round distance for the scale bar
+    const niceDistances = [1, 2, 5, 10, 20, 50, 100];
+    let barDist = 10;
+    for (const d of niceDistances) {
+      if (d * pxPerUnit > 50 && d * pxPerUnit < 300) { barDist = d; break; }
+    }
+    const barPx = barDist * pxPerUnit;
+    const bx = canvasW - barPx - 30, by = canvasH - 30;
+    ectx.strokeStyle = '#fff';
+    ectx.lineWidth = 2;
+    ectx.beginPath();
+    ectx.moveTo(bx, by - 4);
+    ectx.lineTo(bx, by);
+    ectx.lineTo(bx + barPx, by);
+    ectx.lineTo(bx + barPx, by - 4);
+    ectx.stroke();
+    ectx.font = 'bold 11px JetBrains Mono, monospace';
+    ectx.textAlign = 'center';
+    ectx.fillStyle = '#fff';
+    ectx.fillText(`${barDist} ${unitLabel}`, bx + barPx / 2, by - 8);
+  }
+
+  const a = document.createElement('a');
+  a.href = export_canvas.toDataURL('image/png');
+  a.download = `wifi-heatmap-${new Date().toISOString().slice(0,10)}.png`;
+  a.click();
+  toast('PNG exported');
+  logAction('Heatmap PNG exported');
+}
+
+// ── Scale Calibration ──
+function startScaleCalibration() {
+  scaleCalMode = true;
+  scaleCalPt1 = null;
+  document.getElementById('scaleCalibrateBtn').classList.add('active');
+  document.getElementById('scaleCalibrateBtn').textContent = 'Click 2 points on floor plan...';
+  canvasArea.style.cursor = 'crosshair';
+  toast('Click the first point of a known distance');
+}
+
+function handleScaleClick(x, y) {
+  if (!scaleCalPt1) {
+    scaleCalPt1 = { x, y };
+    toast('Click the second point');
+    drawPoints(); // to show the first marker
+  } else {
+    const p1 = scaleCalPt1;
+    const p2 = { x, y };
+    const distPx = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    scaleCalMode = false;
+    canvasArea.style.cursor = '';
+    document.getElementById('scaleCalibrateBtn').textContent = 'Calibrate Scale';
+    document.getElementById('scaleCalibrateBtn').classList.remove('active');
+    document.getElementById('scaleInputRow').style.display = '';
+    document.getElementById('scaleDistInput').focus();
+    // Store temporarily
+    scaleCalibration = { p1, p2, distPx, distReal: null, unit: 'm' };
+    drawPoints();
+    toast('Enter the real-world distance');
+  }
+}
+
+function applyScaleCalibration() {
+  const dist = parseFloat(document.getElementById('scaleDistInput').value);
+  const unit = document.getElementById('scaleUnitSelect').value;
+  if (!dist || dist <= 0 || !scaleCalibration) { toast('Enter a valid distance'); return; }
+  scaleCalibration.distReal = dist;
+  scaleCalibration.unit = unit;
+  document.getElementById('scaleInputRow').style.display = 'none';
+  document.getElementById('scaleClearBtn').style.display = '';
+  document.getElementById('scaleInfo').textContent =
+    `${dist} ${unit} = ${Math.round(scaleCalibration.distPx)} px (${(scaleCalibration.distPx / dist).toFixed(1)} px/${unit})`;
+  toast(`Scale: ${dist} ${unit}`);
+  logAction(`Scale calibrated: ${dist} ${unit}`);
+  saveData();
+  drawPoints();
+}
+
+function clearScaleCalibration() {
+  scaleCalibration = null;
+  scaleCalPt1 = null;
+  document.getElementById('scaleInfo').textContent = 'Not calibrated';
+  document.getElementById('scaleClearBtn').style.display = 'none';
+  document.getElementById('scaleInputRow').style.display = 'none';
+  toast('Scale calibration cleared');
+  saveData();
+  drawPoints();
+}
+
+// ── Annotations ──
+function toggleAnnotationMode() {
+  annotationMode = !annotationMode;
+  const btn = document.getElementById('annotateBtn');
+  if (annotationMode) {
+    btn.classList.add('active');
+    btn.textContent = 'Click map to place note...';
+    canvasArea.style.cursor = 'crosshair';
+    toast('Click on the map to place a note');
+  } else {
+    btn.classList.remove('active');
+    btn.textContent = '+ Add Note';
+    if (!wallMode && !floorMode && !apMode && !scaleCalMode) canvasArea.style.cursor = '';
+  }
+}
+
+function handleAnnotationClick(x, y, clientX, clientY) {
+  annotationMode = false;
+  const btn = document.getElementById('annotateBtn');
+  btn.classList.remove('active');
+  btn.textContent = '+ Add Note';
+  canvasArea.style.cursor = '';
+
+  // Show rename popup to enter text
+  showCanvasRename(clientX, clientY, 'Note', (text) => {
+    const ann = { id: Date.now(), x: Math.round(x), y: Math.round(y), text };
+    annotations.push(ann);
+    updateAnnotationList();
+    drawPoints();
+    saveData();
+    logAction(`Note added: "${text}"`, () => {
+      const idx = annotations.indexOf(ann);
+      if (idx >= 0) { annotations.splice(idx, 1); updateAnnotationList(); drawPoints(); saveData(); }
+    });
+  });
+}
+
+function updateAnnotationList() {
+  const el = document.getElementById('annotationList');
+  if (!el) return;
+  if (annotations.length === 0) {
+    el.innerHTML = '<div style="color:var(--text-dim); font-style:italic; padding:4px 0">No notes yet</div>';
+    return;
+  }
+  el.innerHTML = '';
+  annotations.forEach((ann, i) => {
+    const div = document.createElement('div');
+    div.className = 'wall-item';
+    div.innerHTML = `<span class="wall-dot" style="background:var(--accent)"></span>
+      <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${escapeHtml(ann.text)}</span>
+      <button class="wall-del" title="Delete">×</button>`;
+    div.querySelector('.wall-del').addEventListener('click', () => {
+      const removed = annotations.splice(i, 1)[0];
+      updateAnnotationList();
+      drawPoints();
+      saveData();
+      logAction(`Note deleted: "${removed.text}"`, () => {
+        annotations.splice(i, 0, removed);
+        updateAnnotationList(); drawPoints(); saveData();
+      });
+    });
+    el.appendChild(div);
+  });
+}
+
+// ── Speed Test ──
+async function runSpeedTest() {
+  try {
+    const url = 'https://speed.cloudflare.com/__down?bytes=500000';
+    const start = performance.now();
+    const resp = await fetch(url, { cache: 'no-store' });
+    await resp.arrayBuffer();
+    const elapsed = (performance.now() - start) / 1000;
+    const mbps = (500000 * 8 / elapsed) / 1e6;
+    return Math.round(mbps * 10) / 10;
+  } catch {
+    return null;
+  }
+}
+
+// ── Wall Material Presets ──
+function showWallMaterialDialog() {
+  const current = wallMaterial;
+  let html = '<div style="font-size:12px">';
+  for (const [key, mat] of Object.entries(WALL_MATERIALS)) {
+    const checked = key === current ? 'checked' : '';
+    const attenStr = mat.atten !== null ? ` (${mat.atten} dB loss)` : ' (auto-calculated)';
+    html += `<label style="display:flex; align-items:center; gap:8px; padding:4px 0; cursor:pointer">
+      <input type="radio" name="wallMat" value="${key}" ${checked} onchange="setWallMaterial('${key}')">
+      ${mat.label}${attenStr}
+    </label>`;
+  }
+  html += '</div>';
+  showConfirm('Wall Material', '', () => {});
+  // Replace the confirm dialog content
+  const dialog = document.querySelector('.confirm-dialog');
+  if (dialog) {
+    dialog.querySelector('p').innerHTML = html;
+    dialog.querySelector('.confirm-actions').innerHTML = `
+      <button class="btn" onclick="this.closest('.confirm-overlay').remove()">Close</button>`;
+  }
+}
+
+function setWallMaterial(mat) {
+  wallMaterial = mat;
+  const preset = WALL_MATERIALS[mat];
+  if (preset && preset.atten !== null) {
+    // Apply fixed attenuation to all walls
+    for (const w of walls) {
+      w.strength = Math.min(1, preset.atten / 15);
+    }
+  }
+  updateHeatmap();
+  saveData();
+  toast(`Wall material: ${preset.label}`);
+}
+
+// ── Multi-page PDF ──
+async function loadMultiPagePDF(file) {
+  const reader = new FileReader();
+  return new Promise((resolve, reject) => {
+    reader.onload = async (ev) => {
+      try {
+        toast('Loading PDF pages...');
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(ev.target.result) }).promise;
+        const numPages = pdf.numPages;
+        for (let p = 1; p <= numPages; p++) {
+          const page = await pdf.getPage(p);
+          const scale = 2;
+          const viewport = page.getViewport({ scale });
+          const offscreen = document.createElement('canvas');
+          offscreen.width = viewport.width;
+          offscreen.height = viewport.height;
+          const ctx = offscreen.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const pageName = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim() || 'Floor';
+          addFloorplan(numPages > 1 ? `${pageName} (Page ${p})` : pageName, offscreen.toDataURL('image/png'));
+          toast(`Page ${p}/${numPages} loaded`);
+        }
+        toast(`${numPages} page${numPages > 1 ? 's' : ''} loaded`);
+        logAction(`PDF loaded: ${numPages} page${numPages > 1 ? 's' : ''}`);
+        resolve();
+      } catch (err) {
+        toast('Failed to load PDF');
+        console.error(err);
+        reject(err);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
 }
 
 // ── Data Persistence ──

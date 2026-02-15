@@ -20,11 +20,11 @@ Open **http://localhost:8199** in your browser. No pip installs, no config, no A
 
 ## How It Works
 
-1. **Upload a floor plan** — PNG, JPG, or PDF
+1. **Upload a floor plan** — PNG, JPG, or PDF (multi-page PDFs create one floorplan per page)
 2. **Walk to a spot** in your building
 3. **Click that spot** on the floor plan — it auto-scans your WiFi and places a measurement point
 4. **Repeat** — the more points, the better the heatmap
-5. **Export** your data as JSON to save or share
+5. **Export** your data as JSON or PNG
 
 ## Features
 
@@ -33,10 +33,21 @@ Open **http://localhost:8199** in your browser. No pip installs, no config, no A
 - **Dead zone detection** — if no WiFi is found, automatically marks the spot as a dead zone
 - **Manual mode** — use a slider to set dBm values if auto-scan doesn't work on your OS
 - **Internet connectivity detection** — shows whether you have internet access at each point
+- **Speed testing** — optional download speed test at each measurement point
 - **Network list** — see all nearby WiFi networks with signal strength, band, and channel info
 
+### Heatmap Analysis
+- **Signal Strength mode** — classic dBm heatmap with customizable color thresholds
+- **Signal-to-Noise (SNR) mode** — visualize signal quality relative to noise floor
+- **Connectivity mode** — color by internet access and download speed instead of signal strength; instantly spot areas with strong WiFi but no internet (misconfigured APs, captive portals, etc.)
+- **Per-SSID filtering** — view the heatmap for a specific network, not just the connected one
+- **Band filtering** — filter by 2.4 GHz, 5 GHz, or 6 GHz
+- **Independent thresholds** — each heatmap mode has its own color threshold sliders (dBm, dB SNR, Mbps)
+- **Internet warning markers** — points with strong signal but no internet get a red warning badge on the map
+- **Color legend** — always-visible legend showing the active color scale and filters
+
 ### Floor Plans
-- **PDF support** — upload PDFs directly, first page is rendered as your map
+- **PDF support** — upload PDFs directly; multi-page PDFs create one floorplan per page
 - **Multi-floorplan support** — manage multiple floor plans, switch between them freely
 - **Background stripping** — remove white or black backgrounds from floor plans for a cleaner overlay
 - **Drag & drop upload** — drop an image or PDF directly onto the canvas
@@ -44,6 +55,7 @@ Open **http://localhost:8199** in your browser. No pip installs, no config, no A
 ### Walls & Perimeter
 - **Wall drawing** — draw interior walls as line segments; walls affect how the heatmap blends signal across rooms
 - **Wall chaining** — walls automatically chain together for fast drawing
+- **Wall material presets** — assign material types (drywall, concrete, metal, etc.) with predefined attenuation values
 - **Perimeter tracing** — trace the building perimeter to clip the heatmap to interior spaces
 - **Multi-perimeter** — trace multiple separate areas on the same floor plan
 - **Snap-to-wall** — new walls snap to existing wall endpoints, wall lines, perimeter vertices, and perimeter edges
@@ -61,6 +73,11 @@ Open **http://localhost:8199** in your browser. No pip installs, no config, no A
 - **Outside only mode** — hides the satellite map inside the building perimeter so it's not distracting
 - **Visibility toggle** — show/hide the map entirely
 
+### Tools
+- **Scale calibration** — click two points and enter the real-world distance to calibrate measurements
+- **Annotations** — place text notes anywhere on the floor plan
+- **PNG export** — export the full heatmap as an image with legend, annotations, and scale bar
+
 ### Display & Navigation
 - **Pan & zoom** — scroll to zoom toward cursor, hold Space to drag, or use the drag mode button
 - **Fit to screen** — one-click button to fit the floor plan to your window
@@ -70,7 +87,7 @@ Open **http://localhost:8199** in your browser. No pip installs, no config, no A
 
 ### Sidebar & Console
 - **Collapsible sidebar** — collapse the entire left panel to maximize the map view
-- **Collapsible sections** — each sidebar section can be individually collapsed
+- **Collapsible sections** — each sidebar section can be individually collapsed; collapsed sections show summary info (connected network, input mode)
 - **Activity console** — timestamped log of every action (points placed, walls drawn, items deleted, etc.)
 - **Click-to-undo** — click any console entry to undo that specific action
 
@@ -117,6 +134,7 @@ If auto-scan doesn't work on your setup, switch to **Manual mode** and enter sig
 - **Trace the perimeter** — clips the heatmap to your building outline
 - **Place your APs** — marking access point locations helps you understand coverage patterns
 - **Use the satellite map** — align a satellite view behind your floor plan for spatial context
+- **Check connectivity** — switch to Connectivity mode to find areas with signal but no internet
 
 ## Project Structure
 
