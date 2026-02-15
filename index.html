@@ -1323,7 +1323,7 @@
           <div class="section-body">
             <ul>
               <li><strong>Floor Plans</strong> &rarr; upload a PNG, JPG, or PDF of your space.</li>
-              <li>Click anywhere on the floor plan to <strong>scan and place</strong> a measurement point.</li>
+              <li>WiFi scans run <strong>continuously</strong> in the background. Click anywhere on the floor plan to <strong>instantly place</strong> a measurement point.</li>
               <li>The heatmap builds automatically as you add points.</li>
               <li>Add more points for higher accuracy &mdash; especially near walls and corners.</li>
             </ul>
@@ -1335,7 +1335,7 @@
           <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Scanning &amp; Points</h3>
           <div class="section-body">
             <ul>
-              <li><strong>Auto Scan</strong> &mdash; click the map and the app runs a real WiFi scan at that spot.</li>
+              <li><strong>Auto Scan</strong> &mdash; scans WiFi continuously in the background. Click the map to instantly place a point with the latest data. The sidebar shows live signal updates.</li>
               <li><strong>Manual Mode</strong> &mdash; enter a dBm value by hand (useful without a WiFi adapter).</li>
               <li>Hover a point on the map to highlight it; click to scroll to it in the sidebar.</li>
               <li>Click a point's name in the sidebar to rename it.</li>
@@ -1454,7 +1454,7 @@
 
       </div>
     </div>
-    <div class="btn-wrap"><button class="btn" id="heatmapPauseBtn" onclick="toggleHeatmapPause()" style="font-size:12px; padding:4px 10px; white-space:nowrap">⏸ Pause</button><div class="btn-tooltip right-align">Pause automatic heatmap rendering while placing points, walls, or APs. Resume to apply all changes at once.</div></div>
+    <div class="btn-wrap"><button class="btn" id="heatmapPauseBtn" onclick="toggleScanPause()" style="font-size:12px; padding:4px 10px; white-space:nowrap">⏸ Pause</button><div class="btn-tooltip right-align">Pause/resume continuous WiFi scanning. Points can still be placed while paused using the last cached scan data.</div></div>
   </div>
 </div>
 
@@ -1466,7 +1466,7 @@
     <button class="sidebar-toggle" id="sidebarCloseBtn" onclick="toggleSidebar()"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="10 3 5 8 10 13"/></svg></button>
     <!-- Current Signal -->
     <div class="sidebar-section">
-      <h3>Current Signal</h3>
+      <h3>Current Signal <span id="scanAge" style="font-size:10px; font-weight:400; color:var(--text-dim); margin-left:4px"></span></h3>
       <div class="signal-display">
         <div class="signal-big" id="signalBig">—</div>
         <div class="signal-unit">dBm</div>
@@ -1477,7 +1477,7 @@
     </div>
 
     <!-- Network Selector -->
-    <div class="sidebar-section" id="networkSection" style="display:none">
+    <div class="sidebar-section collapsed" id="networkSection" style="display:none">
       <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Network <span style="font-size:11px; font-weight:400; color:var(--text-dim)" id="networkCount"></span><span class="collapsed-hint" id="networkHint">Not connected</span></h3>
       <div class="section-body">
         <div id="networkList" class="network-list"></div>
@@ -1485,7 +1485,7 @@
     </div>
 
     <!-- Input Mode -->
-    <div class="sidebar-section">
+    <div class="sidebar-section collapsed">
       <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Input Mode<span class="collapsed-hint" id="modeHintCollapsed">Auto Scan</span></h3>
       <div class="section-body">
         <div class="mode-toggle">
@@ -1493,7 +1493,7 @@
           <button onclick="setMode('manual')" id="modeManual">Manual</button>
         </div>
         <p style="font-size:12px; color:var(--text-dim); line-height:1.5" id="modeHint">
-          Click on the floor plan to auto-scan and place a measurement point.
+          Scanning continuously. Click on the floor plan to place a point.
         </p>
         <div class="manual-input hidden" id="manualInput">
           <input type="range" min="-100" max="-20" value="-50" id="manualSlider"
@@ -1669,6 +1669,15 @@ let mode = 'auto';  // 'auto' or 'manual'
 let currentSignal = null;
 let selectedNetwork = null;   // null = connected network, or SSID string for a specific network
 let nearbyNetworks = [];      // list from last scan
+
+// Continuous background scan loop
+let _scanLoopTimer = null;
+let _lastScanResult = null;
+let _lastSpeedResult = null;
+let _scanPaused = false;
+let _scanInProgress = false;
+let _lastScanTime = 0;
+let _scanAgeTimer = null;
 let wallMode = false;
 let walls = [];              // [{x1, y1, x2, y2, name, strength}, ...]
 let wallStartPoint = null;   // {x, y} — first click of current segment
@@ -1848,11 +1857,13 @@ async function init() {
   const initStart = performance.now();
   setStatus('scanning', 'Initializing...');
   setupEventListeners();
-  // Try initial scan
+  // Try initial scan and start continuous loop
   try {
     const t0 = performance.now();
     const resp = await fetch('/api/scan');
     const info = await resp.json();
+    _lastScanResult = info;
+    _lastScanTime = Date.now();
     updateSignalDisplay(info);
     logAction('WiFi scan (' + ((performance.now() - t0) / 1000).toFixed(1) + 's)');
   } catch {}
@@ -1881,6 +1892,8 @@ async function init() {
   } else {
     updateStatusText();
   }
+  // Start continuous background scanning
+  if (mode === 'auto') startScanLoop();
 }
 
 async function loadSavedData(data) {
@@ -2804,6 +2817,11 @@ function onMouseDown(e) {
       return;
     }
 
+    // Block placement when scan is paused in auto mode (data would be stale)
+    if (mode === 'auto' && _scanPaused) {
+      toast('Scanning is paused — resume to place points');
+      return;
+    }
     placePoint(pos.x, pos.y);
   }
 }
@@ -2992,14 +3010,22 @@ async function placePoint(x, y) {
   let dbm;
   let isDeadZone = false;
   let scanInfo = null;
-  setStatus('scanning', 'Scanning...');
 
   if (mode === 'auto') {
-    try {
-      const resp = await fetch('/api/scan');
-      scanInfo = await resp.json();
+    // Use cached scan from background loop if available
+    if (_lastScanResult) {
+      scanInfo = _lastScanResult;
+    } else {
+      // Fallback: no cached result yet, do a blocking scan
+      setStatus('scanning', 'Scanning...');
+      try {
+        const resp = await fetch('/api/scan');
+        scanInfo = await resp.json();
+        _lastScanResult = scanInfo;
+      } catch {}
+    }
+    if (scanInfo) {
       updateSignalDisplay(scanInfo);
-      // Use selected network's signal if one is picked
       const display = getDisplayInfo(scanInfo);
       if (display.signal_dbm !== null) {
         dbm = display.signal_dbm;
@@ -3007,7 +3033,7 @@ async function placePoint(x, y) {
         dbm = -100;
         isDeadZone = true;
       }
-    } catch {
+    } else {
       dbm = -100;
       isDeadZone = true;
     }
@@ -3016,11 +3042,10 @@ async function placePoint(x, y) {
   }
 
   const display = scanInfo ? getDisplayInfo(scanInfo) : null;
-  // Run speed test if enabled
+  // Use cached speed test from background loop
   let speedMbps = null;
   if (document.getElementById('speedTestEnabled')?.checked) {
-    setStatus('scanning', 'Running speed test...');
-    speedMbps = await runSpeedTest();
+    speedMbps = _lastSpeedResult;
   }
 
   const point = {
@@ -3044,25 +3069,18 @@ async function placePoint(x, y) {
 
   points.push(point);
   updatePointList();
-  let renderTime = '0.0';
-  if (isLiveHeatmap()) {
-    setStatus('scanning', 'Rendering heatmap...');
-    const t0 = performance.now();
-    await updateHeatmapAsync();
-    renderTime = ((performance.now() - t0) / 1000).toFixed(1);
-  } else {
-    _heatmapStale = true;
-    drawPoints();
-    renderMapCanvas();
-  }
+  setStatus('scanning', 'Rendering heatmap...');
+  const t0 = performance.now();
+  await updateHeatmapAsync();
+  const renderTime = ((performance.now() - t0) / 1000).toFixed(1);
   saveData();
 
   const bandStr = point.band ? ` (${point.band})` : '';
   const speedStr = speedMbps ? ` · ${speedMbps.toFixed(1)} Mbps` : '';
   const ptNum = points.length;
   const ptMsg = isDeadZone ? 'Dead zone marked' : `Point ${ptNum} placed: ${dbm} dBm${bandStr}${speedStr}`;
-  toast(isLiveHeatmap() ? ptMsg + ' (' + renderTime + 's)' : ptMsg);
-  logAction(isLiveHeatmap() ? ptMsg + ' (render: ' + renderTime + 's)' : ptMsg, () => {
+  toast(ptMsg + ' (' + renderTime + 's)');
+  logAction(ptMsg + ' (render: ' + renderTime + 's)', () => {
     const idx = points.indexOf(point);
     if (idx >= 0) { points.splice(idx, 1); updatePointList(); updateHeatmap(); saveData(); }
   });
@@ -3223,10 +3241,91 @@ function setMode(m) {
   document.getElementById('modeManual').className = m === 'manual' ? 'active' : '';
   document.getElementById('manualInput').classList.toggle('hidden', m !== 'manual');
   document.getElementById('modeHint').textContent = m === 'auto'
-    ? 'Click on the floor plan to auto-scan and place a measurement point.'
+    ? 'Scanning continuously. Click on the floor plan to place a point.'
     : 'Set signal strength with the slider, then click to place.';
   const mhc = document.getElementById('modeHintCollapsed');
   if (mhc) mhc.textContent = m === 'auto' ? 'Auto Scan' : 'Manual';
+  // Start/stop scan loop based on mode
+  if (m === 'auto' && !_scanPaused) {
+    startScanLoop();
+  } else {
+    stopScanLoop();
+  }
+}
+
+// ── Continuous Background Scan Loop ──
+async function _doScanCycle() {
+  if (_scanInProgress) return;
+  _scanInProgress = true;
+  try {
+    const resp = await fetch('/api/scan');
+    const info = await resp.json();
+    _lastScanResult = info;
+    _lastScanTime = Date.now();
+    updateSignalDisplay(info);
+    // Run speed test if enabled
+    if (document.getElementById('speedTestEnabled')?.checked) {
+      _lastSpeedResult = await runSpeedTest();
+    } else {
+      _lastSpeedResult = null;
+    }
+  } catch (e) {
+    // Keep previous results on failure — stale data is better than none
+  }
+  _scanInProgress = false;
+}
+
+function _updateScanAge() {
+  const el = document.getElementById('scanAge');
+  if (!el) return;
+  if (!_lastScanTime || _scanPaused) { el.textContent = ''; return; }
+  const sec = ((Date.now() - _lastScanTime) / 1000).toFixed(1);
+  el.textContent = sec + 's ago';
+}
+
+function startScanLoop() {
+  if (_scanLoopTimer) return; // already running
+  _doScanCycle(); // immediate first scan
+  _scanLoopTimer = setInterval(_doScanCycle, 4000);
+  if (!_scanAgeTimer) _scanAgeTimer = setInterval(_updateScanAge, 100);
+  _updateScanAge();
+}
+
+function stopScanLoop() {
+  if (_scanLoopTimer) {
+    clearInterval(_scanLoopTimer);
+    _scanLoopTimer = null;
+  }
+  if (_scanAgeTimer) {
+    clearInterval(_scanAgeTimer);
+    _scanAgeTimer = null;
+  }
+  const el = document.getElementById('scanAge');
+  if (el) el.textContent = '';
+}
+
+function toggleScanPause() {
+  _scanPaused = !_scanPaused;
+  const btn = document.getElementById('heatmapPauseBtn');
+  if (_scanPaused) {
+    btn.textContent = '▶ Resume';
+    btn.style.color = 'var(--warning, #f59e0b)';
+    stopScanLoop();
+    // Blank out signal display while paused
+    document.getElementById('signalBig').textContent = '—';
+    document.getElementById('signalBig').style.color = 'var(--text-dim)';
+    document.getElementById('signalBand').textContent = '';
+    const inetEl = document.getElementById('internetStatus');
+    if (inetEl) inetEl.style.display = 'none';
+    const pauseSSID = currentSignal?.ssid || 'Connected';
+    setStatus('online', `${pauseSSID} · Scanner paused`);
+    toast('Scanning paused');
+  } else {
+    btn.textContent = '⏸ Pause';
+    btn.style.color = '';
+    if (mode === 'auto') startScanLoop();
+    toast('Scanning resumed');
+  }
 }
 
 // ── Satellite Map ──
@@ -4462,52 +4561,8 @@ function scrollToPointInList(idx) {
 
 // ── Heatmap Rendering ──
 let _heatmapRenderPending = false;
-let _heatmapStale = false;
-
-let _heatmapPaused = false;
-
-function isLiveHeatmap() {
-  return !_heatmapPaused;
-}
-
-function toggleHeatmapPause() {
-  _heatmapPaused = !_heatmapPaused;
-  const btn = document.getElementById('heatmapPauseBtn');
-  if (_heatmapPaused) {
-    btn.textContent = '▶ Resume';
-    btn.style.color = 'var(--warning, #f59e0b)';
-    toast('Heatmap paused — changes won\'t re-render until resumed');
-  } else {
-    btn.textContent = '⏸ Pause';
-    btn.style.color = '';
-    if (_heatmapStale) {
-      manualRefreshHeatmap();
-    } else {
-      toast('Heatmap resumed');
-    }
-  }
-}
-
-async function manualRefreshHeatmap() {
-  setStatus('scanning', 'Refreshing heatmap...');
-  const t0 = performance.now();
-  await updateHeatmapAsync();
-  const renderTime = ((performance.now() - t0) / 1000).toFixed(1);
-  _heatmapStale = false;
-  saveData();
-  logAction('Heatmap refreshed (' + renderTime + 's)');
-  toast('Heatmap refreshed (' + renderTime + 's)');
-}
 
 function updateHeatmap() {
-  // Skip render if live heatmap is off — just mark stale
-  if (!isLiveHeatmap()) {
-    _heatmapStale = true;
-    drawPoints();
-    renderMapCanvas();
-    return;
-  }
-  // Always use web worker to avoid blocking main thread
   if (_heatmapRenderPending) return;
   _heatmapRenderPending = true;
   recalcWallStrengths();
