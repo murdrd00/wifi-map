@@ -2570,7 +2570,7 @@ function latLngToTile(lat, lng, zoom) {
 
 async function fetchAndStitchTiles(lat, lng, zoom) {
   const TILE_SIZE = 256;
-  const GRID = 5;
+  const GRID = 9;
   const HALF = Math.floor(GRID / 2);
   const center = latLngToTile(lat, lng, zoom);
 
