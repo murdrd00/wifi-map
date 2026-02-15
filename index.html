@@ -335,6 +335,8 @@
     border-top: 1px solid var(--border);
   }
   .btn-wrap:hover .btn-tooltip { display: block; }
+  .btn-tooltip.right-align { left: auto; right: 0; transform: none; }
+  .btn-tooltip.right-align::before { left: auto; right: 16px; transform: rotate(45deg); }
 
   /* ── Layout ── */
   .main {
@@ -1210,18 +1212,6 @@
         </div>
         <button class="btn" style="width:100%; font-size:12px; margin-top:4px; margin-bottom:4px" onclick="applyDisplay()">Apply Display</button>
         <div class="dm-divider"></div>
-        <div class="hint-wrap">
-          <div class="dm-row">
-            <label>Live Heatmap</label>
-            <input type="checkbox" id="liveHeatmap" checked onchange="toggleLiveHeatmap()">
-          </div>
-          <p class="dm-hint">When enabled, the heatmap re-renders automatically after placing points, walls, etc.</p>
-        </div>
-        <div id="liveHeatmapOff" style="display:none">
-          <p style="font-size:10px; color:var(--warning, #f59e0b); margin:2px 0 4px">Heatmap won't update automatically. Click below to refresh manually.</p>
-          <button class="btn" style="width:100%; font-size:12px" onclick="manualRefreshHeatmap()">↻ Refresh Heatmap</button>
-        </div>
-        <div class="dm-divider"></div>
         <div class="dm-row">
           <label>Theme</label>
           <button class="btn" style="font-size:12px; padding:4px 10px" onclick="toggleTheme()" id="themeBtn">
@@ -1313,6 +1303,7 @@
         </div>
       </div>
     </div>
+    <div class="btn-wrap"><button class="btn" id="heatmapPauseBtn" onclick="toggleHeatmapPause()" style="font-size:12px; padding:4px 10px; white-space:nowrap">⏸ Pause</button><div class="btn-tooltip right-align">Pause automatic heatmap rendering while placing points, walls, or APs. Resume to apply all changes at once.</div></div>
   </div>
 </div>
 
@@ -4238,15 +4229,27 @@ function highlightPoint(idx) {
 let _heatmapRenderPending = false;
 let _heatmapStale = false;
 
+let _heatmapPaused = false;
+
 function isLiveHeatmap() {
-  return document.getElementById('liveHeatmap')?.checked !== false;
+  return !_heatmapPaused;
 }
 
-function toggleLiveHeatmap() {
-  const on = document.getElementById('liveHeatmap').checked;
-  document.getElementById('liveHeatmapOff').style.display = on ? 'none' : '';
-  if (on && _heatmapStale) {
-    manualRefreshHeatmap();
+function toggleHeatmapPause() {
+  _heatmapPaused = !_heatmapPaused;
+  const btn = document.getElementById('heatmapPauseBtn');
+  if (_heatmapPaused) {
+    btn.textContent = '▶ Resume';
+    btn.style.color = 'var(--warning, #f59e0b)';
+    toast('Heatmap paused — changes won\'t re-render until resumed');
+  } else {
+    btn.textContent = '⏸ Pause';
+    btn.style.color = '';
+    if (_heatmapStale) {
+      manualRefreshHeatmap();
+    } else {
+      toast('Heatmap resumed');
+    }
   }
 }
 
@@ -4406,13 +4409,24 @@ self.onmessage = function(e) {
     const det = (bx-ax)*(dy-cy)-(by-ay)*(dx-cx);
     if (Math.abs(det)<1e-10) return false;
     const t = ((cx-ax)*(dy-cy)-(cy-ay)*(dx-cx))/det;
+    if (t<=0||t>=1) return false;
     const u = ((cx-ax)*(by-ay)-(cy-ay)*(bx-ax))/det;
-    return t>0&&t<1&&u>0&&u<1;
+    return u>0&&u<1;
   }
+  // Precompute wall bounding boxes for fast AABB rejection
+  const wallBB = wallSegs.map(w => ({
+    x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2, s: w.strength,
+    minX: Math.min(w.x1, w.x2), maxX: Math.max(w.x1, w.x2),
+    minY: Math.min(w.y1, w.y2), maxY: Math.max(w.y1, w.y2),
+  }));
   function countWalls(ax,ay,bx,by) {
     const crossed = [];
-    for (const w of wallSegs) {
-      if (segIntersect(ax,ay,bx,by,w.x1,w.y1,w.x2,w.y2)) crossed.push(w.strength);
+    const lMinX = ax<bx?ax:bx, lMaxX = ax>bx?ax:bx;
+    const lMinY = ay<by?ay:by, lMaxY = ay>by?ay:by;
+    for (let i=0;i<wallBB.length;i++) {
+      const w = wallBB[i];
+      if (w.maxX<lMinX||w.minX>lMaxX||w.maxY<lMinY||w.minY>lMaxY) continue;
+      if (segIntersect(ax,ay,bx,by,w.x1,w.y1,w.x2,w.y2)) crossed.push(w.s);
     }
     return crossed;
   }
@@ -4489,6 +4503,10 @@ self.onmessage = function(e) {
   }
 
   const data = new Uint8ClampedArray(w*h*4);
+  // Pre-allocate flat arrays for AP->pixel data (avoid per-pixel allocation)
+  const apPxDx = hasAPs ? new Float64Array(aps.length) : null;
+  const apPxDy = hasAPs ? new Float64Array(aps.length) : null;
+  const apPxDist = hasAPs ? new Float64Array(aps.length) : null;
 
   for (let py=0;py<h;py++) {
     for (let px=0;px<w;px++) {
@@ -4498,38 +4516,39 @@ self.onmessage = function(e) {
       const fi=useFloors?getFloor(rx,ry):-1;
       const maxDist=useFloors&&fi!==-1?floorMaxDist[fi]:globalMaxDist;
 
-      // Precompute AP->pixel vectors once per pixel
-      let apPixelData=null;
+      // Precompute AP->pixel vectors once per pixel (reuse arrays to avoid GC)
       if (hasAPs) {
-        apPixelData=aps.map(ap => {
-          const dx=rx-ap.x, dy=ry-ap.y;
-          const dist=Math.sqrt(dx*dx+dy*dy);
-          return {dx,dy,dist};
-        });
+        for (let ai=0;ai<aps.length;ai++) {
+          const dx=rx-aps[ai].x, dy=ry-aps[ai].y;
+          apPxDx[ai]=dx; apPxDy[ai]=dy; apPxDist[ai]=Math.sqrt(dx*dx+dy*dy);
+        }
       }
 
+      const fadeLimit=maxDist*1.5;
       let ws=0,vs=0,nearest=Infinity;
       for (let pi=0;pi<rp.length;pi++) {
         const pt=rp[pi];
-        const dist=Math.hypot(pt.x-rx,pt.y-ry);
+        const dx=pt.x-rx,dy=pt.y-ry;
+        const dist=Math.sqrt(dx*dx+dy*dy);
         if (dist<nearest) nearest=dist;
         if (dist<1) { ws=1;vs=pt.val;nearest=0;break; }
-        let wt=1/Math.pow(dist,power);
-        if (wallSegs.length>0) {
+        if (dist>fadeLimit) continue;
+        let wt=1/(dist*dist*Math.sqrt(dist));
+        if (wallBB.length>0) {
           const cr=countWalls(rx,ry,pt.x,pt.y);
-          for (const s of cr) wt*=1.0-s*(1.0-WALL_ATTEN_MAX);
+          for (let ci=0;ci<cr.length;ci++) wt*=1.0-cr[ci]*(1.0-WALL_ATTEN_MAX);
         }
         // AP directional bias: weight points by alignment with AP->pixel direction
         if (hasAPs) {
           let bestFactor=0;
           for (let ai=0;ai<aps.length;ai++) {
             const mp=apMPData[ai][pt._idx];
-            const pp=apPixelData[ai];
-            if (mp.dist<1||pp.dist<1) { bestFactor=1; break; }
-            const dot=mp.dx*pp.dx+mp.dy*pp.dy;
-            const cosAngle=dot/(mp.dist*pp.dist);
+            const ppDist=apPxDist[ai];
+            if (mp.dist<1||ppDist<1) { bestFactor=1; break; }
+            const dot=mp.dx*apPxDx[ai]+mp.dy*apPxDy[ai];
+            const cosAngle=dot/(mp.dist*ppDist);
             const angularFactor=(1+cosAngle)/2;
-            const radialRatio=mp.dist/pp.dist;
+            const radialRatio=mp.dist/ppDist;
             const radialFactor=radialRatio<=1?1:1/(1+(radialRatio-1)*0.5);
             const combined=angularFactor*radialFactor;
             if (combined>bestFactor) bestFactor=combined;
