@@ -692,22 +692,46 @@
     padding: 2px 0;
   }
 
-  /* Toast notification */
-  .toast {
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%) translateY(100px);
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 20px;
-    font-size: 13px;
-    z-index: 999;
-    transition: transform 0.3s ease;
-    font-family: 'JetBrains Mono', monospace;
+  /* Toast notification (hidden, now using status bar) */
+  .toast { display: none; }
+
+  /* Activity Console */
+  .console-section {
+    border-top: 1px solid var(--border);
+    padding: 12px 16px;
+    flex-shrink: 0;
   }
-  .toast.show { transform: translateX(-50%) translateY(0); }
+  .console-section h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  .console-log {
+    max-height: 150px;
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .console-log::-webkit-scrollbar { width: 4px; }
+  .console-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .console-entry {
+    color: var(--text-dim);
+    padding: 2px 4px;
+    border-radius: 3px;
+    cursor: default;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .console-entry.undoable { cursor: pointer; }
+  .console-entry.undoable:hover { color: var(--text); background: var(--surface2); }
+  .console-entry .ce-time { color: var(--border); font-size: 10px; flex-shrink: 0; }
+  .console-entry .ce-msg { flex: 1; }
 
   /* Floorplan dropdown list */
   .fp-list {
@@ -845,13 +869,13 @@
       <div class="btn-tooltip">Trace the perimeter of each floor or building on your floor plan.</div>
     </div>
     <div class="dropdown" id="apDropdown">
-      <button class="btn" onclick="toggleDropdown('apDropdown')">
+      <button class="btn" id="apBtn" onclick="if(apMode){exitApMode();return;} toggleDropdown('apDropdown')">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="8" cy="10" r="2.5"/>
           <path d="M4.5 7.5a5 5 0 0 1 7 0"/>
           <path d="M2.5 5.5a8 8 0 0 1 11 0"/>
         </svg>
-        APs ▾
+        <span id="apBtnLabel">APs ▾</span>
       </button>
       <div class="dropdown-menu" style="min-width: 240px;">
         <div class="dm-label">Access Points</div>
@@ -1059,6 +1083,12 @@
               id="clearBtn">
         Clear All Points
       </button>
+    </div>
+
+    <!-- Activity Console -->
+    <div class="console-section">
+      <h3>Console</h3>
+      <div class="console-log" id="consoleLog"></div>
     </div>
   </div>
 
@@ -1321,7 +1351,10 @@ async function init() {
     const resp = await fetch('/api/data');
     const data = await resp.json();
     loadSavedData(data);
-  } catch {}
+    logAction('Session loaded');
+  } catch {
+    logAction('New session started');
+  }
 }
 
 function loadSavedData(data) {
@@ -1432,6 +1465,7 @@ function setupEventListeners() {
   // Wall mode buttons
   document.getElementById('wallBtn').addEventListener('click', toggleWallMode);
   document.getElementById('wallClearBtn').addEventListener('click', () => {
+    const backup = [...walls];
     walls = [];
     wallStartPoint = null;
     exitWallMode();
@@ -1439,6 +1473,10 @@ function setupEventListeners() {
     updateHeatmap();
     saveData();
     toast('Walls cleared');
+    logAction('All ' + backup.length + ' walls cleared', () => {
+      walls = backup;
+      updateWallList(); drawWallOverlay(); updateHeatmap(); saveData();
+    });
   });
 
   // AP mode button
@@ -1451,6 +1489,7 @@ function setupEventListeners() {
   document.getElementById('floorBtn').addEventListener('click', toggleFloorMode);
   document.getElementById('floorCloseBtn').addEventListener('click', closeCurrentFloor);
   document.getElementById('floorClearBtn').addEventListener('click', () => {
+    const backup = [...floorRegions];
     floorRegions = [];
     floorCurrentVerts = [];
     exitFloorMode();
@@ -1458,6 +1497,10 @@ function setupEventListeners() {
     updateHeatmap();
     saveData();
     toast('Perimeters cleared');
+    logAction('All ' + backup.length + ' perimeters cleared', () => {
+      floorRegions = backup;
+      updateFloorList(); drawFloorOverlay(); updateHeatmap(); saveData();
+    });
   });
 
   // Floor plan upload
@@ -1513,7 +1556,8 @@ function setupEventListeners() {
         loadSavedData(data);
         updateHeatmap();
         toast('Data imported');
-      } catch { toast('Invalid file'); }
+        logAction('Data imported');
+      } catch { toast('Invalid file'); logAction('Import failed: invalid file'); }
     };
     reader.readAsText(file);
   });
@@ -1592,10 +1636,14 @@ function setupEventListeners() {
         floorCurrentVerts.pop();
         drawFloorOverlay();
       } else if (wallMode && walls.length > 0) {
-        walls.pop();
+        const removed = walls.pop();
         updateWallList();
         drawWallOverlay();
         saveData();
+        logAction((removed.name || 'Wall') + ' removed (undo)', () => {
+          walls.push(removed);
+          updateWallList(); drawWallOverlay(); updateHeatmap(); saveData();
+        });
       } else {
         undoLastPoint();
       }
@@ -1809,6 +1857,7 @@ function loadFloorplanFromDataURL(dataURL, skipStripReset) {
     updateHeatmap();
     renderMapCanvas();
     saveData();
+    logAction('Floor plan loaded (' + img.width + '×' + img.height + ')');
   };
   img.src = dataURL;
 }
@@ -2130,7 +2179,12 @@ function onMouseDown(e) {
       updateApList();
       drawPoints();
       saveData();
-      toast('Access point placed');
+      const apMsg = ap.name + ' placed';
+      toast(apMsg);
+      logAction(apMsg, () => {
+        const idx = accessPoints.indexOf(ap);
+        if (idx >= 0) { accessPoints.splice(idx, 1); updateApList(); drawPoints(); saveData(); }
+      });
       return;
     }
 
@@ -2147,15 +2201,20 @@ function onMouseDown(e) {
           return;
         }
         // Second click: commit wall segment, chain (end becomes next start)
-        walls.push({
+        const wall = {
           x1: wallStartPoint.x, y1: wallStartPoint.y,
           x2: pt.x, y2: pt.y,
           name: 'Wall ' + (walls.length + 1),
           strength: 0.5,
-        });
+        };
+        walls.push(wall);
         wallStartPoint = pt;  // chain: end point becomes next start
         updateWallList();
         saveData();
+        logAction(wall.name + ' placed', () => {
+          const idx = walls.indexOf(wall);
+          if (idx >= 0) { walls.splice(idx, 1); updateWallList(); drawWallOverlay(); updateHeatmap(); saveData(); }
+        });
       }
       drawWallOverlay();
       return;
@@ -2383,7 +2442,13 @@ async function placePoint(x, y) {
   saveData();
 
   const bandStr = point.band ? ` (${point.band})` : '';
-  toast(isDeadZone ? 'No signal — dead zone marked' : `Point added: ${dbm} dBm${bandStr}`);
+  const ptNum = points.length;
+  const ptMsg = isDeadZone ? 'Dead zone marked' : `Point ${ptNum} placed: ${dbm} dBm${bandStr}`;
+  toast(ptMsg);
+  logAction(ptMsg, () => {
+    const idx = points.indexOf(point);
+    if (idx >= 0) { points.splice(idx, 1); updatePointList(); updateHeatmap(); saveData(); }
+  });
 }
 
 // ── Signal Display ──
@@ -2605,16 +2670,18 @@ async function loadSatelliteMap() {
   if (!address) return;
 
   toast('Looking up address...');
+  logAction('Geocoding: ' + address);
   const geo = await geocodeAddress(address);
-  if (!geo) { toast('Address not found'); return; }
+  if (!geo) { toast('Address not found'); logAction('Geocode failed: address not found'); return; }
 
   mapState.address = address;
   mapState.lat = geo.lat;
   mapState.lng = geo.lng;
+  logAction('Found: ' + geo.lat.toFixed(5) + ', ' + geo.lng.toFixed(5));
 
   toast('Fetching satellite tiles...');
   const img = await fetchAndStitchTiles(geo.lat, geo.lng, mapState.tileZoom);
-  if (!img) { toast('Failed to load tiles'); return; }
+  if (!img) { toast('Failed to load tiles'); logAction('Tile fetch failed'); return; }
 
   mapTilesImage = img;
   mapState.tilesDataURL = img.toDataURL('image/jpeg', 0.75);
@@ -2638,6 +2705,7 @@ async function loadSatelliteMap() {
   renderMapCanvas();
   saveData();
   toast('Satellite map loaded');
+  logAction('Satellite map loaded');
 }
 
 function syncMapControlsFromState() {
@@ -2681,10 +2749,14 @@ function renderMapCanvas() {
     console.log('Map corners on canvas:', corners, 'canvas:', canvasW, canvasH);
     mapCtx.setTransform(a, b, c, d, tx, ty);
   } else {
-    // No alignment yet — just center the tile image
+    // No alignment yet — scale to fit canvas and center
     const tw = mapTilesImage.width;
     const th = mapTilesImage.height;
-    mapCtx.translate(canvasW / 2 - tw / 2, canvasH / 2 - th / 2);
+    const fitScale = Math.min(canvasW / tw, canvasH / th) * 0.85;
+    const sx = (canvasW - tw * fitScale) / 2;
+    const sy = (canvasH - th * fitScale) / 2;
+    mapCtx.translate(sx, sy);
+    mapCtx.scale(fitScale, fitScale);
   }
 
   mapCtx.drawImage(mapTilesImage, 0, 0);
@@ -2835,9 +2907,12 @@ function canvasToMapImg(canvasX, canvasY) {
     console.log('canvasToMapImg:', {canvasX, canvasY}, '→', {ix, iy}, 'affine:', mapState.affine);
     return { x: ix, y: iy };
   } else {
-    // Default centering: translate(canvasW/2 - tw/2, canvasH/2 - th/2)
+    // Default: scale-to-fit + center
     const tw = mapTilesImage.width, th = mapTilesImage.height;
-    return { x: canvasX - (canvasW / 2 - tw / 2), y: canvasY - (canvasH / 2 - th / 2) };
+    const fitScale = Math.min(canvasW / tw, canvasH / th) * 0.85;
+    const sx = (canvasW - tw * fitScale) / 2;
+    const sy = (canvasH - th * fitScale) / 2;
+    return { x: (canvasX - sx) / fitScale, y: (canvasY - sy) / fitScale };
   }
 }
 
@@ -3078,11 +3153,17 @@ function updateWallList() {
       if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
     });
     div.querySelector('.wall-del').addEventListener('click', () => {
+      const removed = walls[i];
+      const removedIdx = i;
       walls.splice(i, 1);
       updateWallList();
       if (wallMode) drawWallOverlay();
       updateHeatmap();
       saveData();
+      logAction((removed.name || 'Wall') + ' deleted', () => {
+        walls.splice(removedIdx, 0, removed);
+        updateWallList(); drawWallOverlay(); updateHeatmap(); saveData();
+      });
     });
     list.appendChild(div);
   });
@@ -3244,14 +3325,18 @@ function toggleApMode() {
     wallMode = false; exitWallMode();
     floorMode = false; exitFloorMode();
     canvasArea.style.cursor = 'crosshair';
+    document.getElementById('apBtn').classList.add('active');
+    document.getElementById('apBtnLabel').textContent = 'APs ✓';
     drawPoints();
-    toast('Click on the map to place an access point. Press Escape when done.');
+    toast('Click on the map to place an access point. Escape or click APs to finish.');
   }
 }
 
 function exitApMode() {
   apMode = false;
   canvasArea.style.cursor = '';
+  document.getElementById('apBtn').classList.remove('active');
+  document.getElementById('apBtnLabel').textContent = 'APs ▾';
   updateApList();
   drawPoints();
 }
@@ -3287,10 +3372,16 @@ function updateApList() {
     // Delete button
     div.querySelector('.fp-del').addEventListener('click', (e) => {
       e.stopPropagation();
+      const removed = accessPoints[i];
+      const removedIdx = i;
       accessPoints.splice(i, 1);
       updateApList();
       drawPoints();
       saveData();
+      logAction((removed.name || 'AP') + ' deleted', () => {
+        accessPoints.splice(removedIdx, 0, removed);
+        updateApList(); drawPoints(); saveData();
+      });
     });
     list.appendChild(div);
   });
@@ -3341,16 +3432,21 @@ function closeCurrentFloor() {
     toast('Need at least 3 points');
     return;
   }
-  floorRegions.push({
+  const perim = {
     vertices: [...floorCurrentVerts],
     name: 'Perimeter ' + (floorRegions.length + 1),
-  });
+  };
+  floorRegions.push(perim);
   floorCurrentVerts = [];
   document.getElementById('floorCloseBtn').classList.add('hidden');
   updateFloorList();
   drawFloorOverlay();
   saveData();
   toast('Perimeter saved — trace the next one or click Done');
+  logAction(perim.name + ' saved', () => {
+    const idx = floorRegions.indexOf(perim);
+    if (idx >= 0) { floorRegions.splice(idx, 1); updateFloorList(); drawFloorOverlay(); updateHeatmap(); saveData(); }
+  });
 }
 
 function exitFloorMode() {
@@ -3460,11 +3556,17 @@ function updateFloorList() {
       if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
     });
     div.querySelector('.floor-del').addEventListener('click', () => {
+      const removed = floorRegions[i];
+      const removedIdx = i;
       floorRegions.splice(i, 1);
       updateFloorList();
       if (floorMode) drawFloorOverlay();
       updateHeatmap();
       saveData();
+      logAction((removed.name || 'Perimeter') + ' deleted', () => {
+        floorRegions.splice(removedIdx, 0, removed);
+        updateFloorList(); drawFloorOverlay(); updateHeatmap(); saveData();
+      });
     });
     list.appendChild(div);
   });
@@ -3562,31 +3664,47 @@ function updatePointList() {
 }
 
 function deletePoint(id) {
-  points = points.filter(p => p.id !== id);
+  const idx = points.findIndex(p => p.id === id);
+  if (idx < 0) return;
+  const removed = points[idx];
+  const removedIdx = idx;
+  points.splice(idx, 1);
   updatePointList();
   updateHeatmap();
   saveData();
   document.getElementById('tooltip').style.display = 'none';
+  const label = removed.name || ('Point ' + (removedIdx + 1));
+  logAction(label + ' deleted', () => {
+    points.splice(removedIdx, 0, removed);
+    updatePointList(); updateHeatmap(); saveData();
+  });
 }
 
 function clearAllPoints() {
   if (points.length === 0) return;
-  const msg = 'Delete all ' + points.length + ' measurement points? This cannot be undone.';
+  const count = points.length;
+  const msg = 'Delete all ' + count + ' measurement points?';
   if (!confirm(msg)) return;
+  const backup = [...points];
   points = [];
   updatePointList();
   updateHeatmap();
   saveData();
   toast('All points cleared');
+  logAction('All ' + count + ' points cleared', () => {
+    points = backup;
+    updatePointList(); updateHeatmap(); saveData();
+  });
 }
 
 function undoLastPoint() {
   if (points.length === 0) return;
-  points.pop();
+  const removed = points.pop();
   updatePointList();
   updateHeatmap();
   saveData();
   toast('Undone');
+  logAction('Point ' + (points.length + 1) + ' removed');
 }
 
 function highlightPoint(idx) {
@@ -4043,6 +4161,7 @@ function exportData() {
   a.click();
   URL.revokeObjectURL(url);
   toast('Exported');
+  logAction('Data exported');
 }
 
 function importData() {
@@ -4050,11 +4169,68 @@ function importData() {
 }
 
 // ── Toast ──
+let _toastTimer = null;
 function toast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2000);
+  // Show in topbar status area instead of bottom popup
+  const st = document.getElementById('statusText');
+  st.textContent = msg;
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { updateStatusText(); }, 3000);
+}
+function updateStatusText() {
+  // Restore the normal status (connected SSID or idle)
+  const st = document.getElementById('statusText');
+  const ssid = document.getElementById('signalSSID')?.textContent;
+  const sig = document.getElementById('signalBig')?.textContent;
+  if (ssid && ssid !== 'Not connected' && sig && sig !== '—') {
+    st.textContent = ssid + ' · ' + sig + ' dBm';
+  } else {
+    st.textContent = 'Ready';
+  }
+}
+
+// ── Activity Console ──
+const MAX_CONSOLE_ENTRIES = 100;
+const consoleEntries = []; // {msg, time, undoFn|null}
+
+function logAction(msg, undoFn) {
+  const entry = {
+    msg,
+    time: new Date(),
+    undoFn: undoFn || null,
+  };
+  consoleEntries.push(entry);
+  if (consoleEntries.length > MAX_CONSOLE_ENTRIES) consoleEntries.shift();
+  renderConsole();
+}
+
+function renderConsole() {
+  const el = document.getElementById('consoleLog');
+  if (!el) return;
+  el.innerHTML = '';
+  // Show newest at bottom — render in order
+  for (let i = 0; i < consoleEntries.length; i++) {
+    const entry = consoleEntries[i];
+    const div = document.createElement('div');
+    div.className = 'console-entry' + (entry.undoFn ? ' undoable' : '');
+    const ts = entry.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    div.innerHTML = '<span class="ce-time">' + ts + '</span><span class="ce-msg"></span>';
+    div.querySelector('.ce-msg').textContent = entry.msg;
+    if (entry.undoFn) {
+      const idx = i;
+      div.title = 'Click to undo';
+      div.addEventListener('click', () => {
+        const e = consoleEntries[idx];
+        if (e && e.undoFn) {
+          e.undoFn();
+          e.undoFn = null; // prevent double undo
+          logAction('Undid: ' + e.msg);
+        }
+      });
+    }
+    el.appendChild(div);
+  }
+  el.scrollTop = el.scrollHeight;
 }
 
 // ── Window resize ──
