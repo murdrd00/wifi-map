@@ -306,6 +306,42 @@
     flex-direction: column;
     flex-shrink: 0;
     overflow-y: auto;
+    position: relative;
+    transition: width 0.2s ease, min-width 0.2s ease, padding 0.2s ease;
+  }
+  .sidebar.collapsed {
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    border-right: none;
+    padding: 0;
+  }
+  .sidebar-toggle {
+    position: absolute;
+    top: 12px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    z-index: 10;
+    line-height: 1;
+    padding: 0;
+    transition: background 0.1s;
+  }
+  .sidebar-toggle:hover { color: var(--text); background: var(--surface2); }
+  .sidebar-toggle.collapsed-toggle {
+    position: fixed;
+    left: 16px;
+    top: 62px;
+    right: auto;
   }
   .sidebar-section {
     padding: 16px;
@@ -951,7 +987,9 @@
 <!-- Main -->
 <div class="main">
   <!-- Sidebar -->
-  <div class="sidebar">
+  <button class="sidebar-toggle collapsed-toggle" id="sidebarOpenBtn" onclick="toggleSidebar()" style="display:none"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 3 11 8 6 13"/></svg></button>
+  <div class="sidebar" id="sidebar">
+    <button class="sidebar-toggle" id="sidebarCloseBtn" onclick="toggleSidebar()"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="10 3 5 8 10 13"/></svg></button>
     <!-- Current Signal -->
     <div class="sidebar-section">
       <h3>Current Signal</h3>
@@ -1017,8 +1055,8 @@
     <div class="sidebar-section" style="flex:1">
       <h3>Points (<span id="pointCount">0</span>)</h3>
       <ul class="point-list" id="pointList"></ul>
-      <button class="btn danger" style="width:100%; margin-top:12px"
-              id="clearBtn" disabled>
+      <button class="btn danger" style="width:100%; margin-top:12px; display:none"
+              id="clearBtn">
         Clear All Points
       </button>
     </div>
@@ -1046,7 +1084,7 @@
 
     <!-- Zoom Controls -->
     <div class="zoom-controls">
-      <button onclick="toggleDragMode()" id="dragBtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" stroke="none"><path d="M4.5 7V2.5a1 1 0 0 1 2 0V7h.5V1.5a1 1 0 0 1 2 0V7h.5V2a1 1 0 0 1 2 0v5h.5V4a1 1 0 0 1 2 0v6a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V7.5c0-.5.3-1 .8-1.2.5-.2 1 0 1.3.4l.4.6V7z"/></svg><span class="ztip">Drag mode</span></button>
+      <button onclick="toggleDragMode()" id="dragBtn"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" stroke="none"><path d="M4.5 7V2.5a1 1 0 0 1 2 0V7h.5V1.5a1 1 0 0 1 2 0V7h.5V2a1 1 0 0 1 2 0v5h.5V4a1 1 0 0 1 2 0v6a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V7.5c0-.5.3-1 .8-1.2.5-.2 1 0 1.3.4l.4.6V7z"/></svg><span class="ztip">Drag mode (hold Space)</span></button>
       <button onclick="zoomIn()">+<span class="ztip">Zoom in</span></button>
       <div class="zoom-label" id="zoomLabel">100%</div>
       <button onclick="zoomOut()">−<span class="ztip">Zoom out</span></button>
@@ -1232,6 +1270,7 @@ let zoom = 1;
 let panX = 0, panY = 0;
 let isPanning = false;
 let dragMode = false;
+let spaceHeldDrag = false;
 let lastMouse = { x: 0, y: 0 };
 let canvasW = 0, canvasH = 0;
 
@@ -1528,7 +1567,28 @@ function setupEventListeners() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      if (floorMode && floorCurrentVerts.length > 0) {
+      if (mapAlignMode) {
+        if (mapAlignWaitingFor === 'floorplan' && mapAlignPendingMapPt) {
+          // Undo the pending map point click
+          mapAlignPendingMapPt = null;
+          mapAlignWaitingFor = 'map';
+          updateAlignStatus();
+          drawPoints();
+          toast('Undid map point');
+        } else if (mapAlignWaitingFor === 'map' && mapAlignPairs.length > 0) {
+          // Undo the last completed pair
+          mapAlignPairs.pop();
+          if (mapAlignPairs.length > 0) {
+            computeMapAlignment();
+          } else {
+            mapState.affine = null;
+          }
+          renderMapCanvas();
+          updateAlignStatus();
+          drawPoints();
+          toast('Undid last pair (' + mapAlignPairs.length + ' remaining)');
+        }
+      } else if (floorMode && floorCurrentVerts.length > 0) {
         floorCurrentVerts.pop();
         drawFloorOverlay();
       } else if (wallMode && walls.length > 0) {
@@ -1538,6 +1598,19 @@ function setupEventListeners() {
         saveData();
       } else {
         undoLastPoint();
+      }
+    }
+    if (e.key === ' ' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
+      // Hold space for temporary drag mode — prevent button activation
+      if (document.activeElement && document.activeElement.tagName === 'BUTTON') {
+        document.activeElement.blur();
+      }
+      e.preventDefault();
+      if (!e.repeat && !dragMode) {
+        dragMode = true;
+        spaceHeldDrag = true;
+        document.getElementById('dragBtn').classList.add('active');
+        canvasArea.style.cursor = 'grab';
       }
     }
     if (e.key === 'Escape') {
@@ -1563,6 +1636,18 @@ function setupEventListeners() {
       }
       if (apMode) {
         exitApMode();
+      }
+    }
+  });
+
+  document.addEventListener('keyup', (e) => {
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (spaceHeldDrag) {
+        dragMode = false;
+        spaceHeldDrag = false;
+        document.getElementById('dragBtn').classList.remove('active');
+        canvasArea.style.cursor = (floorMode || wallMode || apMode) ? 'crosshair' : '';
       }
     }
   });
@@ -2132,16 +2217,18 @@ function onDoubleClick(e) {
 function onWheel(e) {
   if (!floorplanImg) return;
   e.preventDefault();
-  const delta = e.deltaY > 0 ? 0.9 : 1.1;
   const rect = canvasArea.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
 
-  // Zoom toward cursor
-  panX = mx - (mx - panX) * delta;
-  panY = my - (my - panY) * delta;
-  zoom *= delta;
-  zoom = Math.max(0.05, Math.min(10, zoom));
+  // Scale factor proportional to scroll amount for smooth trackpad zoom
+  const delta = Math.pow(0.995, e.deltaY);
+  const newZoom = Math.max(0.05, Math.min(10, zoom * delta));
+
+  // Zoom toward cursor — compute pan BEFORE clamping to preserve center
+  panX = mx - (mx - panX) * (newZoom / zoom);
+  panY = my - (my - panY) * (newZoom / zoom);
+  zoom = newZoom;
 
   applyTransform();
 }
@@ -2206,6 +2293,14 @@ function screenToCanvas(sx, sy) {
 function applyTransform() {
   container.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
   document.getElementById('zoomLabel').textContent = Math.round(zoom * 100) + '%';
+}
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const openBtn = document.getElementById('sidebarOpenBtn');
+  const collapsed = !sidebar.classList.contains('collapsed');
+  sidebar.classList.toggle('collapsed', collapsed);
+  openBtn.style.display = collapsed ? '' : 'none';
 }
 
 function toggleDragMode() {
@@ -2575,6 +2670,15 @@ function renderMapCanvas() {
   if (mapState.affine) {
     // Apply affine transform: maps map-image coords → canvas coords
     const [a, b, c, d, tx, ty] = mapState.affine;
+    // Debug: check where the image corners end up on canvas
+    const tw = mapTilesImage.width, th = mapTilesImage.height;
+    const corners = [
+      { x: a*0 + c*0 + tx, y: b*0 + d*0 + ty },
+      { x: a*tw + c*0 + tx, y: b*tw + d*0 + ty },
+      { x: a*tw + c*th + tx, y: b*tw + d*th + ty },
+      { x: a*0 + c*th + tx, y: b*0 + d*th + ty },
+    ];
+    console.log('Map corners on canvas:', corners, 'canvas:', canvasW, canvasH);
     mapCtx.setTransform(a, b, c, d, tx, ty);
   } else {
     // No alignment yet — just center the tile image
@@ -2728,6 +2832,7 @@ function canvasToMapImg(canvasX, canvasY) {
     if (Math.abs(det) < 1e-10) return { x: canvasX, y: canvasY };
     const ix = (d * (canvasX - tx) - c * (canvasY - ty)) / det;
     const iy = (-b * (canvasX - tx) + a * (canvasY - ty)) / det;
+    console.log('canvasToMapImg:', {canvasX, canvasY}, '→', {ix, iy}, 'affine:', mapState.affine);
     return { x: ix, y: iy };
   } else {
     // Default centering: translate(canvasW/2 - tw/2, canvasH/2 - th/2)
@@ -2737,9 +2842,11 @@ function canvasToMapImg(canvasX, canvasY) {
 }
 
 function handleMapAlignClick(canvasX, canvasY) {
+  console.log('[ALIGN] click at', canvasX.toFixed(1), canvasY.toFixed(1), 'waitFor:', mapAlignWaitingFor, 'pairs:', mapAlignPairs.length, 'affine:', JSON.stringify(mapState.affine));
   if (mapAlignWaitingFor === 'map') {
     // Convert canvas click to map-image coordinates
     const imgPt = canvasToMapImg(canvasX, canvasY);
+    console.log('[ALIGN] map click → imgCoords:', imgPt.x.toFixed(1), imgPt.y.toFixed(1));
     mapAlignPendingMapPt = { imgX: imgPt.x, imgY: imgPt.y, canvasX, canvasY };
     mapAlignWaitingFor = 'floorplan';
     updateAlignStatus();
@@ -2747,6 +2854,7 @@ function handleMapAlignClick(canvasX, canvasY) {
     toast('Now click the same point on the floor plan');
   } else {
     // Floorplan click — complete the pair
+    console.log('[ALIGN] fp click at', canvasX.toFixed(1), canvasY.toFixed(1), 'paired with mapImg:', mapAlignPendingMapPt.imgX.toFixed(1), mapAlignPendingMapPt.imgY.toFixed(1));
     mapAlignPairs.push({
       mapPt: { x: mapAlignPendingMapPt.imgX, y: mapAlignPendingMapPt.imgY },
       fpPt: { x: canvasX, y: canvasY },
@@ -2757,6 +2865,7 @@ function handleMapAlignClick(canvasX, canvasY) {
 
     // Live-update: compute and apply alignment after each completed pair
     computeMapAlignment();
+    console.log('[ALIGN] computed affine:', JSON.stringify(mapState.affine));
     renderMapCanvas();
     updateAlignStatus();
     drawPoints();
@@ -2780,22 +2889,47 @@ function computeMapAlignment() {
     // 1 pair: translation only — map img point → floorplan point
     const m = mapAlignPairs[0].mapPt;
     const f = mapAlignPairs[0].fpPt;
-    // Affine: identity scale + translation
-    // x' = 1*imgX + 0*imgY + tx → tx = f.x - m.x
     mapState.affine = [1, 0, 0, 1, f.x - m.x, f.y - m.y];
+    console.log('[ALIGN] 1 pair → translation:', mapState.affine);
     return;
   }
 
-  // 2+ pairs: least-squares affine fit
-  // We want to find [a, b, c, d, tx, ty] such that for each pair:
+  if (n === 2) {
+    // 2 pairs: similarity transform (uniform scale + rotation + translation, NO skew)
+    // This is the right constraint for 2 pairs — 4 equations, 4 unknowns (a, b, tx, ty)
+    // where the transform is: x' = a*mx - b*my + tx,  y' = b*mx + a*my + ty
+    // setTransform(a, b, -b, a, tx, ty) — note c = -b, d = a for similarity
+    const m0 = mapAlignPairs[0].mapPt, f0 = mapAlignPairs[0].fpPt;
+    const m1 = mapAlignPairs[1].mapPt, f1 = mapAlignPairs[1].fpPt;
+
+    const dmx = m1.x - m0.x, dmy = m1.y - m0.y;
+    const dfx = f1.x - f0.x, dfy = f1.y - f0.y;
+    const denom = dmx * dmx + dmy * dmy;
+
+    if (denom < 1e-10) {
+      toast('Map points are too close together — pick points further apart');
+      return;
+    }
+
+    // Solve for a, b:  dfx = a*dmx - b*dmy,  dfy = b*dmx + a*dmy
+    const a = (dfx * dmx + dfy * dmy) / denom;
+    const b = (dfy * dmx - dfx * dmy) / denom;
+    const tx = f0.x - (a * m0.x - b * m0.y);
+    const ty = f0.y - (b * m0.x + a * m0.y);
+
+    mapState.affine = [a, b, -b, a, tx, ty];
+    const scale = Math.sqrt(a * a + b * b);
+    const angle = Math.atan2(b, a) * 180 / Math.PI;
+    console.log('[ALIGN] 2 pairs → similarity: scale=' + scale.toFixed(3) + ' rot=' + angle.toFixed(1) + '°', mapState.affine);
+    return;
+  }
+
+  // 3+ pairs: least-squares affine fit (6 free parameters)
+  // We want [a, b, c, d, tx, ty] such that for each pair:
   //   a*mx + c*my + tx ≈ fx
   //   b*mx + d*my + ty ≈ fy
-  // This is two independent least-squares problems:
-  //   [mx my 1] * [a  c  tx]^T = fx
-  //   [mx my 1] * [b  d  ty]^T = fy
 
-  // Build the normal equations: A^T * A * x = A^T * b
-  // where A is Nx3 matrix with rows [mx, my, 1]
+  // Build normal equations: A^T * A * x = A^T * b
   let ata00 = 0, ata01 = 0, ata02 = 0;
   let ata11 = 0, ata12 = 0, ata22 = 0;
   let atbx0 = 0, atbx1 = 0, atbx2 = 0;
@@ -2811,8 +2945,6 @@ function computeMapAlignment() {
     atby0 += mx * fy; atby1 += my * fy; atby2 += fy;
   }
 
-  // Solve 3x3 symmetric system via Cramer's rule
-  // Matrix: [[ata00, ata01, ata02], [ata01, ata11, ata12], [ata02, ata12, ata22]]
   function solve3x3(m00, m01, m02, m11, m12, m22, r0, r1, r2) {
     const det = m00 * (m11 * m22 - m12 * m12)
               - m01 * (m01 * m22 - m12 * m02)
@@ -2833,8 +2965,10 @@ function computeMapAlignment() {
   }
 
   // solX = [a, c, tx], solY = [b, d, ty]
-  // Canvas setTransform(a, b, c, d, tx, ty): x' = a*x + c*y + tx
   mapState.affine = [solX[0], solY[0], solX[1], solY[1], solX[2], solY[2]];
+  const scaleX = Math.sqrt(mapState.affine[0] ** 2 + mapState.affine[1] ** 2);
+  const scaleY = Math.sqrt(mapState.affine[2] ** 2 + mapState.affine[3] ** 2);
+  console.log('[ALIGN] ' + n + ' pairs → affine: scaleX=' + scaleX.toFixed(3) + ' scaleY=' + scaleY.toFixed(3), mapState.affine);
 }
 
 function removeMap() {
@@ -3363,7 +3497,7 @@ function updatePointList() {
   const list = document.getElementById('pointList');
   const count = document.getElementById('pointCount');
   count.textContent = points.length;
-  document.getElementById('clearBtn').disabled = points.length === 0;
+  document.getElementById('clearBtn').style.display = points.length === 0 ? 'none' : '';
 
   list.innerHTML = '';
   points.forEach((p, i) => {
