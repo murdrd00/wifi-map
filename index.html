@@ -438,6 +438,25 @@
   }
   .sidebar-section.collapsed .collapsed-hint { display: inline; }
 
+  /* Info panel collapsible overrides */
+  #infoDropdown .dropdown-menu { min-width: 340px; max-height: 70vh; overflow-y: auto; }
+  #infoDropdown .sidebar-section { margin: 0; }
+  #infoDropdown .sidebar-section h3.collapsible { padding: 6px 0; margin-bottom: 6px; font-size: 12px; border-bottom: 1px solid var(--border); }
+  #infoDropdown .sidebar-section.collapsed h3.collapsible { margin-bottom: 0; border-bottom-color: transparent; }
+  #infoDropdown .sidebar-section:last-child h3.collapsible { border-bottom-color: transparent; }
+  #infoDropdown .section-body { font-size: 11px; line-height: 1.6; color: var(--text-dim); padding: 0 2px 6px; }
+  #infoDropdown .section-body p { margin: 0 0 6px; }
+  #infoDropdown .section-body ul { margin: 2px 0 6px; padding-left: 16px; }
+  #infoDropdown .section-body li { margin-bottom: 3px; }
+  #infoDropdown .section-body kbd {
+    display: inline-block; padding: 1px 5px; font-size: 10px; font-family: 'JetBrains Mono', monospace;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; color: var(--text);
+    line-height: 1.4; vertical-align: baseline;
+  }
+  #infoDropdown .section-body strong { color: var(--text); font-weight: 600; }
+  #infoDropdown .info-table { width: 100%; margin-top: 4px; }
+  #infoDropdown .info-table td { padding: 2px 4px; font-size: 11px; }
+
   .signal-display {
     text-align: center;
     padding: 20px 0;
@@ -510,6 +529,13 @@
     transition: opacity 0.1s;
   }
   .point-list li:hover .del-btn { opacity: 1; }
+  .point-list li.flash-highlight {
+    animation: listFlash 1.5s ease;
+  }
+  @keyframes listFlash {
+    0%, 100% { background: transparent; }
+    15%, 60% { background: rgba(6, 182, 212, 0.15); }
+  }
 
   .wall-item {
     display: flex; align-items: center; gap: 6px;
@@ -525,6 +551,11 @@
     opacity: 0; transition: opacity 0.15s;
   }
   .wall-item:hover .wall-del { opacity: 1; }
+  .wall-item .ap-name:hover { border-color: var(--border); }
+  .wall-item.flash-highlight {
+    animation: listFlash 1.5s ease;
+    border-radius: 4px;
+  }
 
   /* Mode toggle */
   .mode-toggle {
@@ -1039,12 +1070,13 @@
               <option value="signal">Signal Strength (dBm)</option>
               <option value="snr">Signal-to-Noise (SNR)</option>
               <option value="connectivity">Connectivity</option>
+              <option value="combined">Overall Quality</option>
             </select>
           </div>
-          <p class="dm-hint">Signal Strength: raw dBm values. SNR: signal quality relative to noise floor. Connectivity: internet access and download speed.</p>
+          <p class="dm-hint">Signal Strength: raw dBm values. SNR: signal quality relative to noise floor. Connectivity: internet access and download speed. Overall Quality: normalized blend of all three metrics (0–100).</p>
         </div>
         <div class="dm-divider"></div>
-        <div class="hint-wrap">
+        <div class="hint-wrap" id="filterNetworkWrap">
           <div class="dm-label">Filter by Network</div>
           <div class="dm-row">
             <select id="heatmapSSID" onchange="applyThresholds()" style="flex:1; padding:4px 8px; border-radius:5px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif">
@@ -1054,7 +1086,7 @@
           <p class="dm-hint">Show heatmap for a specific SSID instead of all networks.</p>
         </div>
         <div class="dm-divider"></div>
-        <div class="hint-wrap">
+        <div class="hint-wrap" id="filterBandWrap">
           <div class="dm-label">Filter by Band</div>
           <div class="dm-row">
             <select id="heatmapBand" onchange="applyThresholds()" style="flex:1; padding:4px 8px; border-radius:5px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif">
@@ -1090,7 +1122,10 @@
             <input type="range" min="-100" max="-50" value="-85" id="threshWeak" oninput="updateThreshLabels()">
             <span id="threshWeakVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">-85</span>
           </div>
-          <button class="btn" style="width:100%; font-size:12px; margin-top:6px" onclick="applyThresholds()">Apply Thresholds</button>
+          <div class="dm-row" style="margin-top:6px; gap:4px">
+            <button class="btn" style="flex:1; font-size:12px" onclick="applyThresholds()">Apply</button>
+            <button class="btn" style="font-size:12px; color:var(--text-dim)" onclick="resetThresholdDefaults()">Reset</button>
+          </div>
         </div>
         <!-- SNR thresholds -->
         <div id="threshSNR" style="display:none">
@@ -1115,7 +1150,10 @@
             <input type="range" min="0" max="20" value="10" id="snrThreshWeak" oninput="updateThreshLabels()">
             <span id="snrThreshWeakVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">10</span>
           </div>
-          <button class="btn" style="width:100%; font-size:12px; margin-top:6px" onclick="applyThresholds()">Apply Thresholds</button>
+          <div class="dm-row" style="margin-top:6px; gap:4px">
+            <button class="btn" style="flex:1; font-size:12px" onclick="applyThresholds()">Apply</button>
+            <button class="btn" style="font-size:12px; color:var(--text-dim)" onclick="resetThresholdDefaults()">Reset</button>
+          </div>
         </div>
         <!-- Connectivity thresholds -->
         <div id="threshConn" style="display:none">
@@ -1140,15 +1178,18 @@
             <input type="range" min="0" max="50" value="1" id="connThreshWeak" oninput="updateThreshLabels()">
             <span id="connThreshWeakVal" style="min-width:36px; text-align:right; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--text-dim)">1</span>
           </div>
-          <button class="btn" style="width:100%; font-size:12px; margin-top:6px" onclick="applyThresholds()">Apply Thresholds</button>
-          <p id="connSpeedNote" style="font-size:10px; color:var(--warning, #f59e0b); margin:2px 0 0">Enable "Speed Test" below to get speed data for this mode.</p>
+          <div class="dm-row" style="margin-top:6px; gap:4px">
+            <button class="btn" style="flex:1; font-size:12px" onclick="applyThresholds()">Apply</button>
+            <button class="btn" style="font-size:12px; color:var(--text-dim)" onclick="resetThresholdDefaults()">Reset</button>
+          </div>
+          <p id="connSpeedNote" style="display:none; font-size:10px; color:var(--warning, #f59e0b); margin:2px 0 0">Enable "Speed Test" below to get speed data for this mode.</p>
         </div>
         <div class="dm-divider"></div>
-        <div class="hint-wrap">
+        <div class="hint-wrap" id="speedTestWrap">
           <div class="dm-label">Speed Test</div>
           <div class="dm-row">
             <label style="min-width:70px">Auto test</label>
-            <input type="checkbox" id="speedTestEnabled" onchange="toast(this.checked ? 'Speed test enabled — each scan will also measure download speed' : 'Speed test disabled'); const cn=document.getElementById('connSpeedNote'); if(cn) cn.style.display=this.checked?'none':''">
+            <input type="checkbox" id="speedTestEnabled" checked onchange="toast(this.checked ? 'Speed test enabled — each scan will also measure download speed' : 'Speed test disabled'); const cn=document.getElementById('connSpeedNote'); if(cn) cn.style.display=this.checked?'none':''">
           </div>
           <p class="dm-hint">Downloads a small file to measure throughput at each point. Adds a few seconds per scan. Required for the Connectivity heatmap mode.</p>
         </div>
@@ -1274,33 +1315,143 @@
     </div>
     <div class="dropdown" id="infoDropdown">
       <button class="btn" onclick="toggleDropdown('infoDropdown')">Info ▾</button>
-      <div class="dropdown-menu" style="min-width: 260px;">
-        <div class="info-section">
-          <div class="dm-label">Signal Strength</div>
-          <div class="legend-bar" style="height:14px; border-radius:7px; margin-bottom:6px;"></div>
-          <div class="legend-labels" style="margin-bottom:10px;">
-            <span>Dead</span>
-            <span>-80</span>
-            <span>-60</span>
-            <span>-40</span>
-            <span>-30</span>
+      <div class="dropdown-menu">
+
+        <!-- Getting Started -->
+        <div class="sidebar-section">
+          <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Getting Started</h3>
+          <div class="section-body">
+            <ul>
+              <li><strong>Floor Plans</strong> &rarr; upload a PNG, JPG, or PDF of your space.</li>
+              <li>Click anywhere on the floor plan to <strong>scan and place</strong> a measurement point.</li>
+              <li>The heatmap builds automatically as you add points.</li>
+              <li>Add more points for higher accuracy &mdash; especially near walls and corners.</li>
+            </ul>
           </div>
         </div>
-        <div class="dm-divider"></div>
-        <div class="info-section">
-          <h4>What do dBm values mean?</h4>
-          <table class="info-table">
-            <tr><td><span class="swatch" style="background:#06b6d4"></span>-30 to -40</td><td>Excellent — streaming, video calls</td></tr>
-            <tr><td><span class="swatch" style="background:#22c55e"></span>-40 to -55</td><td>Good — reliable for most tasks</td></tr>
-            <tr><td><span class="swatch" style="background:#eab308"></span>-55 to -70</td><td>Fair — browsing OK, may lag</td></tr>
-            <tr><td><span class="swatch" style="background:#f97316"></span>-70 to -85</td><td>Weak — spotty connection</td></tr>
-            <tr><td><span class="swatch" style="background:#7f1d1d"></span>-85 to -100</td><td>Dead zone — no usable signal</td></tr>
-          </table>
+
+        <!-- Scanning & Points -->
+        <div class="sidebar-section collapsed">
+          <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Scanning &amp; Points</h3>
+          <div class="section-body">
+            <ul>
+              <li><strong>Auto Scan</strong> &mdash; click the map and the app runs a real WiFi scan at that spot.</li>
+              <li><strong>Manual Mode</strong> &mdash; enter a dBm value by hand (useful without a WiFi adapter).</li>
+              <li>Hover a point on the map to highlight it; click to scroll to it in the sidebar.</li>
+              <li>Click a point's name in the sidebar to rename it.</li>
+              <li>Delete points with the <strong>&times;</strong> button or <kbd>Ctrl</kbd>+<kbd>Z</kbd> to undo.</li>
+            </ul>
+          </div>
         </div>
-        <div class="dm-divider"></div>
-        <div class="info-section">
-          <p>dBm (decibels relative to milliwatt) measures WiFi signal power. Values closer to 0 are stronger. Each 3 dBm increase doubles the power.</p>
+
+        <!-- Heatmap Modes -->
+        <div class="sidebar-section collapsed">
+          <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Heatmap Modes</h3>
+          <div class="section-body">
+            <p>Change modes under <strong>Analyze &rarr; Heatmap Type</strong>.</p>
+            <ul>
+              <li><strong>Signal Strength</strong> &mdash; raw dBm values. Closer to 0 = stronger.</li>
+              <li><strong>SNR</strong> &mdash; signal minus noise floor. Higher = cleaner signal.</li>
+              <li><strong>Connectivity</strong> &mdash; internet access &amp; download speed (requires Speed Test on).</li>
+              <li><strong>Overall Quality</strong> &mdash; normalized blend of all three (0&ndash;100).</li>
+            </ul>
+            <p>Adjust the <strong>Color Thresholds</strong> sliders to control where colors transition.</p>
+          </div>
         </div>
+
+        <!-- Walls & Perimeter -->
+        <div class="sidebar-section collapsed">
+          <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Walls &amp; Perimeter</h3>
+          <div class="section-body">
+            <ul>
+              <li><strong>Tools &rarr; Draw Walls</strong> &mdash; draw interior walls that attenuate signal. Click to place points; walls chain together. Press <kbd>Esc</kbd> to stop.</li>
+              <li><strong>Tools &rarr; Draw Perimeter</strong> &mdash; trace the building outline to clip the heatmap to interior space. Supports multiple separate areas.</li>
+              <li><strong>Wall Materials</strong> &mdash; set attenuation strength per wall (drywall, concrete, glass, etc.) under Tools &rarr; Wall Material Presets.</li>
+              <li>Undo the last wall segment with <kbd>Ctrl</kbd>+<kbd>Z</kbd>.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Access Points -->
+        <div class="sidebar-section collapsed">
+          <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Access Points</h3>
+          <div class="section-body">
+            <ul>
+              <li><strong>Tools &rarr; Place Access Points</strong> &mdash; mark where your routers/APs are located.</li>
+              <li>APs improve the heatmap: weak-signal shadows extend <em>away</em> from APs instead of radiating from the measurement point.</li>
+              <li>Hover an AP on the map to highlight it; click to open Tools and scroll to it.</li>
+              <li>Click an AP's name in the list to rename it.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Display & Map -->
+        <div class="sidebar-section collapsed">
+          <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Display &amp; Map</h3>
+          <div class="section-body">
+            <ul>
+              <li><strong>Opacity</strong> slider controls heatmap transparency.</li>
+              <li><strong>Strip Background</strong> removes white/black from the floor plan so the heatmap shows through.</li>
+              <li><strong>Satellite Map</strong> &mdash; enter an address to overlay real-world imagery. Adjust opacity, toggle visibility, or restrict to outside the perimeter only.</li>
+              <li><strong>Align to Floor Plan</strong> &mdash; pick matching points on the floor plan and satellite map to align them.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Scale & Annotations -->
+        <div class="sidebar-section collapsed">
+          <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Scale &amp; Annotations</h3>
+          <div class="section-body">
+            <ul>
+              <li><strong>Tools &rarr; Calibrate Scale</strong> &mdash; click two points of known distance to set real-world scale. Adds a scale bar to PNG exports.</li>
+              <li><strong>Tools &rarr; Add Note</strong> &mdash; place text labels anywhere on the floor plan. Click to position, then type.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Import / Export -->
+        <div class="sidebar-section collapsed">
+          <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Import &amp; Export</h3>
+          <div class="section-body">
+            <ul>
+              <li><strong>File &rarr; Export JSON</strong> &mdash; saves all floor plans, points, walls, settings, and APs to a file.</li>
+              <li><strong>File &rarr; Import JSON</strong> &mdash; loads a previously saved session.</li>
+              <li><strong>File &rarr; Export PNG</strong> &mdash; saves a screenshot of the current view with legend and scale bar.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Keyboard Shortcuts -->
+        <div class="sidebar-section collapsed">
+          <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">Keyboard Shortcuts</h3>
+          <div class="section-body">
+            <ul>
+              <li><kbd>Space</kbd> &mdash; hold to pan/drag the canvas</li>
+              <li><kbd>Esc</kbd> &mdash; stop drawing walls or perimeter</li>
+              <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>&#8984;</kbd>+<kbd>Z</kbd> &mdash; undo last action</li>
+              <li><kbd>Scroll</kbd> &mdash; zoom in/out</li>
+              <li><strong>Right-click</strong> or <strong>Alt+click</strong> &mdash; pan the canvas</li>
+              <li><strong>Hover</strong> a point or AP on the map to highlight it</li>
+              <li><strong>Click</strong> a point or AP to scroll to it in the sidebar/menu</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- dBm Reference -->
+        <div class="sidebar-section collapsed">
+          <h3 class="collapsible" onclick="this.parentElement.classList.toggle('collapsed')">dBm Reference</h3>
+          <div class="section-body">
+            <table class="info-table">
+              <tr><td><span class="swatch" style="background:#06b6d4"></span> -30 to -40</td><td>Excellent &mdash; streaming, video calls</td></tr>
+              <tr><td><span class="swatch" style="background:#22c55e"></span> -40 to -55</td><td>Good &mdash; reliable for most tasks</td></tr>
+              <tr><td><span class="swatch" style="background:#eab308"></span> -55 to -70</td><td>Fair &mdash; browsing OK, may lag</td></tr>
+              <tr><td><span class="swatch" style="background:#f97316"></span> -70 to -85</td><td>Weak &mdash; spotty connection</td></tr>
+              <tr><td><span class="swatch" style="background:#7f1d1d"></span> -85 to -100</td><td>Dead zone &mdash; no usable signal</td></tr>
+            </table>
+            <p style="margin-top:6px">dBm measures WiFi signal power. Closer to 0 = stronger. Each 3 dBm doubles the power.</p>
+          </div>
+        </div>
+
       </div>
     </div>
     <div class="btn-wrap"><button class="btn" id="heatmapPauseBtn" onclick="toggleHeatmapPause()" style="font-size:12px; padding:4px 10px; white-space:nowrap">⏸ Pause</button><div class="btn-tooltip right-align">Pause automatic heatmap rendering while placing points, walls, or APs. Resume to apply all changes at once.</div></div>
@@ -1468,7 +1619,9 @@ function toggleDropdown(id) {
   if (!wasOpen) el.classList.add('open');
 }
 // Close dropdowns when clicking outside
+let _dropdownLockUntil = 0;
 document.addEventListener('click', (e) => {
+  if (Date.now() < _dropdownLockUntil) return;
   if (!e.target.closest('.dropdown')) {
     document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
   }
@@ -2639,26 +2792,16 @@ function onMouseDown(e) {
       return;
     }
 
-    // Check if click hit an existing AP or point — rename instead of placing new
+    // Check if click hit an existing AP or point
     const hitRadius = 18;
-    const hitAP = accessPoints.find(ap => Math.hypot(ap.x - pos.x, ap.y - pos.y) < hitRadius);
-    if (hitAP) {
-      showCanvasRename(e.clientX, e.clientY, hitAP.name, (newName) => {
-        hitAP.name = newName;
-        updateApList();
-        drawPoints();
-        saveData();
-      });
+    const hitApIdx = accessPoints.findIndex(ap => Math.hypot(ap.x - pos.x, ap.y - pos.y) < hitRadius);
+    if (hitApIdx >= 0) {
+      scrollToApInList(hitApIdx);
       return;
     }
-    const hitPt = points.find(p => Math.hypot(p.x - pos.x, p.y - pos.y) < hitRadius);
-    if (hitPt) {
-      showCanvasRename(e.clientX, e.clientY, hitPt.name || `Point`, (newName) => {
-        hitPt.name = newName;
-        updatePointList();
-        drawPoints();
-        saveData();
-      });
+    const hitPtIdx = points.findIndex(p => Math.hypot(p.x - pos.x, p.y - pos.y) < hitRadius);
+    if (hitPtIdx >= 0) {
+      scrollToPointInList(hitPtIdx);
       return;
     }
 
@@ -2666,6 +2809,8 @@ function onMouseDown(e) {
   }
 }
 
+let _hoveredPointIdx = -1;
+let _hoveredApIdx = -1;
 function onMouseMove(e) {
   if (isPanning) {
     panX += e.clientX - lastMouse.x;
@@ -2681,10 +2826,42 @@ function onMouseMove(e) {
     wallSnapResult = snapWallPoint(pos.x, pos.y);
     drawWallOverlay();
   }
+  // Point/AP hover highlight on map
+  if (!dragMode && !wallMode && !floorMode && !apMode && floorplanImg) {
+    const pos = screenToCanvas(e.clientX, e.clientY);
+    const hitR = 18 / zoom;
+    // Check APs first (drawn on top)
+    let foundAp = -1;
+    for (let i = 0; i < accessPoints.length; i++) {
+      if (Math.hypot(accessPoints[i].x - pos.x, accessPoints[i].y - pos.y) < hitR) { foundAp = i; break; }
+    }
+    let foundPt = -1;
+    if (foundAp < 0) {
+      for (let i = 0; i < points.length; i++) {
+        if (Math.hypot(points[i].x - pos.x, points[i].y - pos.y) < hitR) { foundPt = i; break; }
+      }
+    }
+    if (foundPt !== _hoveredPointIdx || foundAp !== _hoveredApIdx) {
+      _hoveredPointIdx = foundPt;
+      _hoveredApIdx = foundAp;
+      if (foundAp >= 0) {
+        highlightAP(foundAp);
+        canvasArea.style.cursor = 'pointer';
+      } else if (foundPt >= 0) {
+        highlightPoint(foundPt);
+        canvasArea.style.cursor = 'pointer';
+      } else {
+        drawPoints();
+        canvasArea.style.cursor = '';
+      }
+    }
+  }
 }
 
 function onMouseUp(e) {
   isPanning = false;
+  _hoveredPointIdx = -1;
+  _hoveredApIdx = -1;
   canvasArea.style.cursor = dragMode ? 'grab' : (floorMode || wallMode || apMode) ? 'crosshair' : '';
 }
 
@@ -3850,11 +4027,38 @@ function updateApList() {
   accessPoints.forEach((ap, i) => {
     const div = document.createElement('div');
     div.className = 'wall-item';
+    div.dataset.apIdx = i;
     div.innerHTML = `
       <span class="wall-dot" style="background:#22d3ee"></span>
-      <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer">${escapeHtml(ap.name)}</span>
+      <span class="ap-name" contenteditable="true" spellcheck="false"
+            style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:text;
+                   padding:1px 4px; border-radius:3px; border:1px solid transparent; outline:none;
+                   transition:border-color 0.15s">${escapeHtml(ap.name)}</span>
       <button class="wall-del" title="Delete">×</button>
     `;
+    const nameEl = div.querySelector('.ap-name');
+    nameEl.addEventListener('blur', () => {
+      const newName = nameEl.textContent.trim();
+      if (newName && newName !== ap.name) {
+        ap.name = newName;
+        drawPoints();
+        saveData();
+      }
+    });
+    nameEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); nameEl.blur(); }
+    });
+    nameEl.addEventListener('mousedown', (e) => e.stopPropagation());
+    nameEl.addEventListener('focus', () => {
+      nameEl.style.borderColor = 'var(--accent)';
+      nameEl.style.background = 'var(--bg)';
+    });
+    nameEl.addEventListener('blur', () => {
+      nameEl.style.borderColor = 'transparent';
+      nameEl.style.background = '';
+    });
+    div.addEventListener('mouseenter', () => highlightAP(i));
+    div.addEventListener('mouseleave', () => drawPoints());
     div.querySelector('.wall-del').addEventListener('click', (e) => {
       e.stopPropagation();
       const removed = accessPoints[i];
@@ -3882,6 +4086,23 @@ function highlightAP(idx) {
   ptCtx.strokeStyle = '#22d3ee';
   ptCtx.lineWidth = 3;
   ptCtx.stroke();
+}
+
+function scrollToApInList(idx) {
+  highlightAP(idx);
+  // Open Tools dropdown if not already open
+  const toolsDd = document.getElementById('toolsDropdown');
+  if (toolsDd && !toolsDd.classList.contains('open')) {
+    _dropdownLockUntil = Date.now() + 500;
+    toggleDropdown('toolsDropdown');
+  }
+  const list = document.getElementById('toolsApList');
+  if (!list) return;
+  const div = list.querySelector(`[data-ap-idx="${idx}"]`);
+  if (!div) return;
+  div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  div.classList.add('flash-highlight');
+  setTimeout(() => div.classList.remove('flash-highlight'), 1500);
 }
 
 // ── Floor Regions ──
@@ -4102,20 +4323,14 @@ function updatePointList() {
   points.forEach((p, i) => {
     const li = document.createElement('li');
     const name = p.name || `Point ${i + 1}`;
-    const bandTag = p.band ? `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:var(--surface2);color:var(--text-dim);margin-left:4px">${p.band}</span>` : '';
-    const speedTag = p.speed_mbps ? `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:var(--surface2);color:var(--text-dim);margin-left:2px">${p.speed_mbps}Mbps</span>` : '';
-    const inetIndicator = p.has_internet === true
-      ? '<span style="font-size:8px;color:#22c55e;margin-right:2px" title="Internet connected">●</span>'
-      : p.has_internet === false
-      ? '<span style="font-size:9px;color:#ef4444;margin-right:2px" title="No internet">⚠</span>'
-      : '';
+    li.dataset.pointIdx = i;
     li.innerHTML = `
       <div class="info">
         <div class="dot" style="background:${signalColor(p.dbm)}"></div>
-        ${inetIndicator}<span class="name" contenteditable="true" spellcheck="false"
+        <span class="name" contenteditable="true" spellcheck="false"
               data-idx="${i}">${name}</span>
       </div>
-      <span class="dbm">${p.dbm} dBm${bandTag}${speedTag}</span>
+      <span class="dbm">${p.dbm} dBm</span>
       <button class="del-btn" data-id="${p.id}" title="Delete">×</button>
     `;
     // Rename on blur or enter
@@ -4141,16 +4356,17 @@ function updatePointList() {
     li.addEventListener('mouseenter', (e) => {
       highlightPoint(i);
       // Show tooltip with details
-      const details = [`${p.dbm} dBm`];
+      const details = [];
+      if (p.ssid) details.push(p.ssid);
+      details.push(`${p.dbm} dBm`);
       if (p.band) details.push(p.band);
       if (p.channel) details.push(`Ch ${p.channel}`);
       if (p.link_speed) details.push(p.link_speed);
       if (p.noise_dbm != null) details.push(`Noise: ${p.noise_dbm} dBm`);
       if (p.noise_dbm != null) details.push(`SNR: ${p.dbm - p.noise_dbm} dB`);
-      if (p.speed_mbps) details.push(`${p.speed_mbps} Mbps`);
-      if (p.has_internet === true) details.push('Internet: Yes');
-      else if (p.has_internet === false) details.push('Internet: No');
-      if (p.ssid) details.push(p.ssid);
+      if (p.speed_mbps) details.push(`${p.speed_mbps.toFixed(1)} Mbps`);
+      if (p.has_internet === true) details.push('Internet: ✓');
+      else if (p.has_internet === false) details.push('Internet: ✗');
       const tip = document.getElementById('tooltip');
       tip.textContent = details.join(' · ');
       tip.style.display = 'block';
@@ -4163,7 +4379,7 @@ function updatePointList() {
       tip.style.top = (e.clientY - 10) + 'px';
     });
     li.addEventListener('mouseleave', () => {
-      updateHeatmap();
+      drawPoints();
       document.getElementById('tooltip').style.display = 'none';
     });
     list.appendChild(li);
@@ -4218,11 +4434,28 @@ function undoLastPoint() {
 function highlightPoint(idx) {
   drawPoints();
   const p = points[idx];
+  if (!p) return;
   ptCtx.beginPath();
   ptCtx.arc(p.x, p.y, 16, 0, Math.PI * 2);
   ptCtx.strokeStyle = '#fff';
   ptCtx.lineWidth = 3;
   ptCtx.stroke();
+}
+
+function scrollToPointInList(idx) {
+  highlightPoint(idx);
+  const list = document.getElementById('pointList');
+  if (!list) return;
+  const li = list.querySelector(`li[data-point-idx="${idx}"]`);
+  if (!li) return;
+  // Ensure sidebar is open
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar && sidebar.classList.contains('hidden')) toggleSidebar();
+  // Scroll into view
+  li.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  // Flash highlight
+  li.classList.add('flash-highlight');
+  setTimeout(() => li.classList.remove('flash-highlight'), 1500);
 }
 
 // ── Heatmap Rendering ──
@@ -4374,6 +4607,31 @@ function getPointValue(pt) {
     }
     return 50;
   }
+  if (htype === 'combined') {
+    const all = getAllThresholds();
+    const clamp01 = v => Math.max(0, Math.min(1, v));
+    // Signal: -100 → 0, excellent → 100
+    const sigNorm = clamp01((pt.dbm + 100) / (all.signal.excellent + 100)) * 100;
+    // SNR: 0 → 0, excellent → 100
+    const noise = pt.noise_dbm ?? -90;
+    const snr = pt.dbm - noise;
+    const snrNorm = clamp01(snr / all.snr.excellent) * 100;
+    // Connectivity (if available)
+    if (pt.has_internet != null) {
+      let connNorm;
+      if (pt.has_internet === false) {
+        connNorm = 0;
+      } else if (pt.speed_mbps != null && pt.speed_mbps > 0) {
+        const cap = Math.max(all.conn.excellent, 100);
+        connNorm = clamp01(pt.speed_mbps / cap) * 100;
+      } else {
+        connNorm = 50; // internet but no speed data
+      }
+      return (sigNorm + snrNorm + connNorm) / 3;
+    }
+    // No connectivity data — average signal + SNR only
+    return (sigNorm + snrNorm) / 2;
+  }
   return pt.dbm;
 }
 
@@ -4381,6 +4639,7 @@ function valueToColor(val) {
   const htype = document.getElementById('heatmapType')?.value || 'signal';
   if (htype === 'snr') return snrToColor(val);
   if (htype === 'connectivity') return connectivityToColor(val);
+  if (htype === 'combined') return combinedToColor(val);
   return dbmToColor(val);
 }
 
@@ -4455,6 +4714,9 @@ self.onmessage = function(e) {
       stops.sort((a,b)=>a.val-b.val);
       return stopsColor(val,stops);
     }
+    if (htype==='combined') {
+      return stopsColor(val,[{val:0,color:[127,29,29]},{val:25,color:[239,68,68]},{val:40,color:[249,115,22]},{val:55,color:[234,179,8]},{val:75,color:[34,197,94]},{val:90,color:[6,182,212]}]);
+    }
     return stopsColor(val,[{val:-100,color:[127,29,29]},{val:th.weak,color:[239,68,68]},{val:(th.weak+th.fair)/2,color:[249,115,22]},{val:th.fair,color:[234,179,8]},{val:th.good,color:[34,197,94]},{val:th.excellent,color:[6,182,212]}]);
   }
 
@@ -4487,7 +4749,7 @@ self.onmessage = function(e) {
   if (useFloors) { for (const fi in floorPointSets) floorMaxDist[fi]=calcMaxDist(floorPointSets[fi]); }
   const globalMaxDist = calcMaxDist(pts);
   const power = 2.5;
-  const defaultVal = htype==='snr'?0:htype==='connectivity'?0:-100;
+  const defaultVal = htype==='snr'?0:htype==='connectivity'?0:htype==='combined'?0:-100;
 
   // AP-aware directional bias precomputation
   const hasAPs = aps && aps.length > 0;
@@ -4875,30 +5137,41 @@ function drawPoints() {
 }
 
 // ── Color Mapping ──
-function getColorThresholds() {
-  const htype = document.getElementById('heatmapType')?.value || 'signal';
-  if (htype === 'snr') {
-    return {
+function getAllThresholds() {
+  return {
+    signal: {
+      excellent: parseInt(document.getElementById('threshExcellent')?.value || -40),
+      good: parseInt(document.getElementById('threshGood')?.value || -55),
+      fair: parseInt(document.getElementById('threshFair')?.value || -70),
+      weak: parseInt(document.getElementById('threshWeak')?.value || -85),
+    },
+    snr: {
       excellent: parseInt(document.getElementById('snrThreshExcellent')?.value || 40),
       good: parseInt(document.getElementById('snrThreshGood')?.value || 30),
       fair: parseInt(document.getElementById('snrThreshFair')?.value || 20),
       weak: parseInt(document.getElementById('snrThreshWeak')?.value || 10),
-    };
-  }
-  if (htype === 'connectivity') {
-    return {
+    },
+    conn: {
       excellent: parseInt(document.getElementById('connThreshExcellent')?.value || 100),
       good: parseInt(document.getElementById('connThreshGood')?.value || 50),
       fair: parseInt(document.getElementById('connThreshFair')?.value || 10),
       weak: parseInt(document.getElementById('connThreshWeak')?.value || 1),
-    };
-  }
-  return {
-    excellent: parseInt(document.getElementById('threshExcellent')?.value || -40),
-    good: parseInt(document.getElementById('threshGood')?.value || -55),
-    fair: parseInt(document.getElementById('threshFair')?.value || -70),
-    weak: parseInt(document.getElementById('threshWeak')?.value || -85),
+    },
   };
+}
+
+function getColorThresholds() {
+  const htype = document.getElementById('heatmapType')?.value || 'signal';
+  if (htype === 'snr') {
+    return getAllThresholds().snr;
+  }
+  if (htype === 'connectivity') {
+    return getAllThresholds().conn;
+  }
+  if (htype === 'combined') {
+    return { excellent: 90, good: 75, fair: 55, weak: 25 };
+  }
+  return getAllThresholds().signal;
 }
 
 function dbmToColor(dbm) {
@@ -4971,6 +5244,27 @@ function connectivityToColor(val) {
     if (val <= stops[i + 1].val) {
       const range = stops[i + 1].val - stops[i].val;
       const t = range > 0 ? (val - stops[i].val) / range : 0;
+      return lerpColor(stops[i].color, stops[i + 1].color, t);
+    }
+  }
+  return stops[stops.length - 1].color;
+}
+
+function combinedToColor(val) {
+  // val is 0-100 quality score (normalized blend of signal, SNR, connectivity)
+  const stops = [
+    { val: 0,   color: [127, 29, 29] },   // terrible
+    { val: 25,  color: [239, 68, 68] },    // weak
+    { val: 40,  color: [249, 115, 22] },   // fair-ish
+    { val: 55,  color: [234, 179, 8] },    // fair
+    { val: 75,  color: [34, 197, 94] },    // good
+    { val: 90,  color: [6, 182, 212] },    // excellent
+  ];
+  if (val <= stops[0].val) return stops[0].color;
+  if (val >= stops[stops.length - 1].val) return stops[stops.length - 1].color;
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (val <= stops[i + 1].val) {
+      const t = (val - stops[i].val) / (stops[i + 1].val - stops[i].val);
       return lerpColor(stops[i].color, stops[i + 1].color, t);
     }
   }
@@ -5102,6 +5396,10 @@ function updateLegend() {
     titleEl.textContent = 'Connectivity';
     barEl.style.background = 'linear-gradient(90deg, #7f1d1d, #646464, #eab308, #22c55e, #06b6d4)';
     labelsEl.innerHTML = `<span>No Net</span><span>N/A</span><span>${th.fair} Mbps</span><span>${th.excellent} Mbps</span>`;
+  } else if (htype === 'combined') {
+    titleEl.textContent = 'Overall Quality';
+    barEl.style.background = 'linear-gradient(90deg, #7f1d1d, #ef4444, #f97316, #eab308, #22c55e, #06b6d4)';
+    labelsEl.innerHTML = `<span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>`;
   } else {
     titleEl.textContent = 'Signal Strength';
     barEl.style.background = 'linear-gradient(90deg, #7f1d1d, #ef4444, #f97316, #eab308, #22c55e, #06b6d4)';
@@ -5150,6 +5448,23 @@ async function applyThresholds() {
   toast('Thresholds applied (' + renderTime + 's)');
 }
 
+function resetThresholdDefaults() {
+  const defaults = {
+    // Signal
+    threshExcellent: -40, threshGood: -55, threshFair: -70, threshWeak: -85,
+    // SNR
+    snrThreshExcellent: 40, snrThreshGood: 30, snrThreshFair: 20, snrThreshWeak: 10,
+    // Connectivity
+    connThreshExcellent: 100, connThreshGood: 50, connThreshFair: 10, connThreshWeak: 1,
+  };
+  for (const [id, val] of Object.entries(defaults)) {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  }
+  updateThreshLabels();
+  applyThresholds();
+}
+
 async function applyDisplay() {
   setStatus('scanning', 'Updating heatmap...');
   const t0 = performance.now();
@@ -5162,6 +5477,7 @@ async function applyDisplay() {
 
 function switchThresholdPanel() {
   const htype = document.getElementById('heatmapType')?.value || 'signal';
+  const isCombined = htype === 'combined';
   document.getElementById('threshSignal').style.display = htype === 'signal' ? '' : 'none';
   document.getElementById('threshSNR').style.display = htype === 'snr' ? '' : 'none';
   document.getElementById('threshConn').style.display = htype === 'connectivity' ? '' : 'none';
@@ -5171,6 +5487,23 @@ function switchThresholdPanel() {
   if (note) note.style.display = (htype === 'connectivity' && !speedOn) ? '' : 'none';
   if (htype === 'connectivity' && !speedOn) {
     toast('Enable "Speed Test" under Analyze for accurate connectivity data');
+  }
+  // Grey out irrelevant sections in connectivity / combined mode
+  const greyOut = htype === 'connectivity' || isCombined;
+  ['filterNetworkWrap', 'filterBandWrap', 'speedTestWrap'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.opacity = greyOut ? '0.4' : '';
+    el.style.pointerEvents = greyOut ? 'none' : '';
+  });
+  // Force speed test on & filters to "All" in connectivity / combined mode
+  if (greyOut) {
+    const stCb = document.getElementById('speedTestEnabled');
+    if (stCb && !stCb.checked) stCb.checked = true;
+    const ssidSel = document.getElementById('heatmapSSID');
+    if (ssidSel && ssidSel.value !== '') ssidSel.value = '';
+    const bandSel = document.getElementById('heatmapBand');
+    if (bandSel && bandSel.value !== '') bandSel.value = '';
   }
 }
 
@@ -5262,7 +5595,7 @@ function exportPNG() {
   ectx.font = 'bold 10px JetBrains Mono, monospace';
   ectx.fillStyle = '#fff';
   ectx.textAlign = 'left';
-  const legendLabel = htype === 'snr' ? 'SNR (dB)' : htype === 'connectivity' ? 'Connectivity' : 'Signal (dBm)';
+  const legendLabel = htype === 'snr' ? 'SNR (dB)' : htype === 'connectivity' ? 'Connectivity' : htype === 'combined' ? 'Overall Quality' : 'Signal (dBm)';
   ectx.fillText(legendLabel, lx + 8, ly + 14);
   // Gradient bar
   const grd = ectx.createLinearGradient(lx + 8, 0, lx + 190, 0);
@@ -5293,6 +5626,9 @@ function exportPNG() {
   } else if (htype === 'connectivity') {
     ectx.fillText('No Net', lx + 4, ly + 42);
     ectx.fillText('Fast', lx + 172, ly + 42);
+  } else if (htype === 'combined') {
+    ectx.fillText('0', lx + 8, ly + 42);
+    ectx.fillText('100', lx + 172, ly + 42);
   } else {
     ectx.fillText('-100', lx + 4, ly + 42);
     ectx.fillText('-30', lx + 172, ly + 42);
